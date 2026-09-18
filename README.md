@@ -2,7 +2,7 @@
 
 Decomposes returns into market, size, value and momentum exposures to test whether an apparent edge is alpha or just beta wearing a disguise.
 
-**Status:** Not started · Next: Day 1 - Ken French loader with cached fixtures
+**Status:** Last checkpoint 2026-09-18 · Next: Day 2 - CAPM baseline regression: alpha, t-statistic, R-squared
 
 ## What this is
 
@@ -48,6 +48,7 @@ Nothing yet. This section fills in as the work lands, including the results that
 <!-- CHECKPOINTS:START -->
 | Date | Commit | What changed | Next |
 |------|--------|--------------|------|
+| 2026-09-18 | `49966a5` | Day 1: Ken French loader (factors/kenfrench.py) parses the Data Library's real monthly+annual CSV off a committed fixture (fixtures/ken_french/, refreshed via scripts/fetch_ken_french.py). Cross-checking the two sections found a genuine quirk, not a bug: RF compounds monthly to annual within 0.03pp, but SMB/HML don't (up to 21pp off in 2020) since they're annually-reconstituted long/short portfolios, not one held-all-year position -- recorded in the README limitations. 9/9 tests pass (pytest), fetch script run by hand and reproduces the committed fixture byte-for-byte. | Day 2 - CAPM baseline regression: alpha, t-statistic, R-squared |
 <!-- CHECKPOINTS:END -->
 
 ## Limitations and what would make me wrong
