@@ -23,6 +23,12 @@ Every source is free. Nothing in this project requires a paid tier, a subscripti
 - Ken French Data Library - factor returns, cached as committed fixtures
 - yfinance - test portfolio returns
 
+`factors/kenfrench.py` loads `fixtures/ken_french/F-F_Research_Data_Factors.csv`
+(refresh with `python scripts/fetch_ken_french.py`, network only, never on the
+test/CLI path) and parses both the monthly and annual sections French ships
+in one file. See `fixtures/ken_french/README.md` for provenance and format
+notes.
+
 ## How to run
 
 ```bash
@@ -49,6 +55,7 @@ Nothing yet. This section fills in as the work lands, including the results that
 - Ken French factors are constructed on US data. Applying them to NSE names is an approximation that needs stating every time.
 - Overlapping windows inflate t-statistics, so Newey-West standard errors are used throughout.
 - Testing several specifications on one dataset is multiple testing. The alpha that survives all of them is the only one worth quoting.
+- **Compounding monthly SMB/HML to a year does not reproduce French's published annual figure**, and the gap is not small: measured across all 99 complete years in the fixture, the worst case (HML, 2020) is 21 percentage points off. RF (a real return) compounds to within 0.03pp, so this isn't a parser bug - it's the annually-reconstituted long/short portfolios' own arithmetic, most likely reflecting month-to-month changes in the underlying six size/book-to-market portfolios rather than one fixed portfolio held all year. `factors.kenfrench.annual_compounding_gaps` therefore checks RF tightly but only sanity-checks SMB/HML/Mkt-RF loosely (catches a wrong column or a forgotten /100, not fine-grained correctness). Anything downstream that needs annual factor returns should read the published annual section directly, not compound the monthly one.
 
 ## Where this sits
 
