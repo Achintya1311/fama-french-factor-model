@@ -20,28 +20,48 @@ This is the test that decides whether the repo is finished. A result that has no
 
 Every source is free. Nothing in this project requires a paid tier, a subscription, or a funded account.
 
-- Ken French Data Library - factor returns, cached as committed fixtures
-- yfinance - test portfolio returns
+- Ken French Data Library - factor returns and industry test portfolios, both cached as committed fixtures
 
 `factors/kenfrench.py` loads `fixtures/ken_french/F-F_Research_Data_Factors.csv`
 (refresh with `python scripts/fetch_ken_french.py`, network only, never on the
 test/CLI path) and parses both the monthly and annual sections French ships
-in one file. See `fixtures/ken_french/README.md` for provenance and format
-notes.
+in one file. `factors/industry.py` loads
+`fixtures/ken_french/10_Industry_Portfolios.csv` (refresh with
+`python scripts/fetch_industry_portfolios.py`) the same way - these ten
+industry portfolios are the test assets the regressions in
+`factors/regress.py` run against, standing in for the yfinance test
+portfolios sketched in the original plan (no key needed, so it's the
+zero-spend, no-network path). See `fixtures/ken_french/README.md` for
+provenance and format notes on both files.
 
 ## How to run
 
 ```bash
 uv venv && source .venv/bin/activate
 uv pip install -r requirements.txt
-python -m factors.regress --portfolio fixtures/sample_returns.csv --model ff5
+python -m factors.regress --portfolio hitec --model capm
 ```
 
-Runs offline against committed fixtures by default. Live data needs a key in `.env` (see `.env.example`); the fixture path is the default so nothing blocks on network access.
+`--portfolio` takes one of the 10 Ken French industry portfolios (NoDur,
+Durbl, Manuf, Enrgy, HiTec, Telcm, Shops, Hlth, Utils, Other), the CAPM/FF3/
+FF5 test assets - not yet a path to an arbitrary returns CSV. `--model` only
+supports `capm` until Day 3 adds FF3/FF5/momentum. Runs entirely offline
+against committed fixtures; nothing here needs network access or a key.
 
 ## Findings
 
-Nothing yet. This section fills in as the work lands, including the results that do not flatter the method.
+**Day 2 - CAPM baseline.** Regressed each of the 10 industry value-weighted
+portfolios on Mkt-RF, 1926-07 to 2026-07 (1,201 months). Results are in the
+expected direction with no surprises: NoDur and Utils have the lowest betas
+(0.74, 0.76 - defensive sectors), Durbl and HiTec the highest (1.28, 1.23 -
+cyclical/growth), R² ranges 0.53-0.91. Two industries (NoDur, Hlth) show a
+plain-OLS-significant positive alpha (t > 1.96) - consistent with the
+well-documented value/quality tilt in those sectors, but that t-stat is not
+yet Newey-West-corrected (Day 4), so "significant" here should be read as
+optimistic, not final. The regression machinery itself was validated
+against an exact known answer first: reconstructing the market portfolio as
+`mkt_rf + rf` and regressing it on `mkt_rf` returns alpha=0, beta=1, R²=1
+to 1e-9 - the only way that isn't a bug in the OLS wiring.
 
 ## Checkpoint log
 
@@ -54,7 +74,8 @@ Nothing yet. This section fills in as the work lands, including the results that
 ## Limitations and what would make me wrong
 
 - Ken French factors are constructed on US data. Applying them to NSE names is an approximation that needs stating every time.
-- Overlapping windows inflate t-statistics, so Newey-West standard errors are used throughout.
+- Overlapping windows inflate t-statistics, so Newey-West standard errors are used throughout. **Not true yet for Day 2's CAPM baseline** - `factors/capm.py` currently reports plain OLS t-stats, which is exactly the kind of inflated t-stat this bullet warns about. Two of the ten industries flag as significant under that non-robust test; treat that as provisional until Day 4 adds the Newey-West correction.
+- The 10 industry portfolios (`factors/industry.py`) are US-constructed test assets, not a Stock Stalker/NSE universe - useful for proving the regression machinery is correct, not for saying anything about NSE names yet. That comes on Day 5, applied to Stock Stalker's own screen output, with the same US-factors-on-NSE-names caveat repeated there.
 - Testing several specifications on one dataset is multiple testing. The alpha that survives all of them is the only one worth quoting.
 - **Compounding monthly SMB/HML to a year does not reproduce French's published annual figure**, and the gap is not small: measured across all 99 complete years in the fixture, the worst case (HML, 2020) is 21 percentage points off. RF (a real return) compounds to within 0.03pp, so this isn't a parser bug - it's the annually-reconstituted long/short portfolios' own arithmetic, most likely reflecting month-to-month changes in the underlying six size/book-to-market portfolios rather than one fixed portfolio held all year. `factors.kenfrench.annual_compounding_gaps` therefore checks RF tightly but only sanity-checks SMB/HML/Mkt-RF loosely (catches a wrong column or a forgotten /100, not fine-grained correctness). Anything downstream that needs annual factor returns should read the published annual section directly, not compound the monthly one.
 
