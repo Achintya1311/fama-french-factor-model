@@ -2,7 +2,7 @@
 
 Decomposes returns into market, size, value and momentum exposures to test whether an apparent edge is alpha or just beta wearing a disguise.
 
-**Status:** Last checkpoint 2026-09-19 · Next: Day 3 - FF3, then FF5 plus momentum; report how alpha decays as factors are added
+**Status:** Last checkpoint 2026-09-19 · Next: Day 4 - Newey-West standard errors, residual autocorrelation, heteroskedasticity tests, rolling betas
 
 ## What this is
 
@@ -39,14 +39,17 @@ provenance and format notes on both files.
 ```bash
 uv venv && source .venv/bin/activate
 uv pip install -r requirements.txt
-python -m factors.regress --portfolio hitec --model capm
+python -m factors.regress --portfolio hitec --model capm    # or ff3, ff5mom
+python -m factors.decay_report                              # all 10 industries x all 3 models
 ```
 
 `--portfolio` takes one of the 10 Ken French industry portfolios (NoDur,
 Durbl, Manuf, Enrgy, HiTec, Telcm, Shops, Hlth, Utils, Other), the CAPM/FF3/
-FF5 test assets - not yet a path to an arbitrary returns CSV. `--model` only
-supports `capm` until Day 3 adds FF3/FF5/momentum. Runs entirely offline
-against committed fixtures; nothing here needs network access or a key.
+FF5 test assets - not yet a path to an arbitrary returns CSV. `--model` is
+`capm` (Mkt-RF), `ff3` (+ SMB, HML), or `ff5mom` (+ RMW, CMA, Mom).
+`factors.decay_report` runs all three models against all ten industries and
+writes `outputs/alpha_decay.csv`. Runs entirely offline against committed
+fixtures; nothing here needs network access or a key.
 
 ## Findings
 
@@ -63,6 +66,36 @@ against an exact known answer first: reconstructing the market portfolio as
 `mkt_rf + rf` and regressing it on `mkt_rf` returns alpha=0, beta=1, R²=1
 to 1e-9 - the only way that isn't a bug in the OLS wiring.
 
+**Day 3 - FF3, then FF5+momentum; alpha decay is not what the plan expected.**
+`factors/multifactor.py` generalizes the single-factor OLS in `capm.py` to
+an arbitrary factor set, so FF3 (Mkt-RF, SMB, HML) and FF5+Mom (+ RMW, CMA,
+Mom) share one regression path. Same correctness gate as Day 2, extended:
+there's no internet access in this sandbox to a journal's published FF3
+table to replicate against, so the check instead regresses each Fama-French
+factor on the full set it belongs to - an exact analytical identity (its
+own loading=1, every other loading and alpha=0, R²=1), not an estimate -
+for SMB, HML (FF3), RMW, and Mom (FF5+Mom); see `tests/test_multifactor.py`
+for why this stands in for "replicates a published result."
+
+Running `factors/decay_report.py` across all 10 industries and all 3
+models (`outputs/alpha_decay.csv`) does **not** show the monotonic
+shrinkage the plan expected. NoDur's alpha does shrink and flip
+insignificant as expected (CAPM +1.89% t=2.35 -> FF3 +1.77% t=2.20 ->
+FF5+Mom -1.28% t=-1.32). But HiTec's does the opposite: CAPM +0.57%
+(t=0.54, n.s.) -> FF3 +1.51% (t=1.55, n.s.) -> FF5+Mom **+5.44% (t=4.47,
+significant)** - alpha *grows* and turns significant as more factors are
+added, the reverse of "the edge was just beta in disguise." The honest
+reason is a confound the plan didn't anticipate, not a discovery: FF5
+data only starts 1963-07 (RMW/CMA need book equity and profitability data
+CRSP/Compustat doesn't reach as far back as Mkt-RF/SMB/HML), so CAPM/FF3
+run on 1,201 months (1926-2026) and FF5+Mom on 757 (1963-2026) - a
+different, shorter, more tech-heavy sample window, not just a richer
+factor set. Comparing alpha across models here conflates "more factors"
+with "a different 63 years of history"; a same-window comparison (FF3
+re-run restricted to 1963-2026) is the honest fix and is Day 4/5 scope,
+not done yet. Reported as-is rather than reframed to fit the expected
+story - see Limitations.
+
 ## Checkpoint log
 
 <!-- CHECKPOINTS:START -->
@@ -78,6 +111,8 @@ to 1e-9 - the only way that isn't a bug in the OLS wiring.
 - Overlapping windows inflate t-statistics, so Newey-West standard errors are used throughout. **Not true yet for Day 2's CAPM baseline** - `factors/capm.py` currently reports plain OLS t-stats, which is exactly the kind of inflated t-stat this bullet warns about. Two of the ten industries flag as significant under that non-robust test; treat that as provisional until Day 4 adds the Newey-West correction.
 - The 10 industry portfolios (`factors/industry.py`) are US-constructed test assets, not a Stock Stalker/NSE universe - useful for proving the regression machinery is correct, not for saying anything about NSE names yet. That comes on Day 5, applied to Stock Stalker's own screen output, with the same US-factors-on-NSE-names caveat repeated there.
 - Testing several specifications on one dataset is multiple testing. The alpha that survives all of them is the only one worth quoting.
+- **The Day 3 CAPM -> FF3 -> FF5+Mom comparison is confounded by sample window, not just factor count.** FF5 data starts 1963-07 (RMW/CMA need data CRSP/Compustat doesn't have further back), so FF5+Mom regressions run on 757 months (1963-2026) against CAPM/FF3's 1,201 (1926-2026) - a shorter, more tech-heavy, post-1963 America. HiTec's alpha *growing* from +0.57% (CAPM) to +5.44% and turning significant (FF5+Mom) is reported honestly rather than smoothed into the "alpha shrinks as factors are added" story the plan expected; a same-window FF3 re-run restricted to 1963-2026 would isolate factor effect from window effect and hasn't been done yet.
+- **Day 3's correctness gate does not replicate an actual published academic figure.** This sandbox has no internet access to a journal's FF3/FF5 replication table, so "replicates a known result" is instead each Fama-French factor's exact analytical self-loading (SMB/HML on FF3, RMW/Mom on FF5+Mom: alpha=0, own loading=1, all others=0, R²=1 to 1e-9) - a real identity check, not an estimate, but not the same evidentiary bar as matching a peer-reviewed number.
 - **Compounding monthly SMB/HML to a year does not reproduce French's published annual figure**, and the gap is not small: measured across all 99 complete years in the fixture, the worst case (HML, 2020) is 21 percentage points off. RF (a real return) compounds to within 0.03pp, so this isn't a parser bug - it's the annually-reconstituted long/short portfolios' own arithmetic, most likely reflecting month-to-month changes in the underlying six size/book-to-market portfolios rather than one fixed portfolio held all year. `factors.kenfrench.annual_compounding_gaps` therefore checks RF tightly but only sanity-checks SMB/HML/Mkt-RF loosely (catches a wrong column or a forgotten /100, not fine-grained correctness). Anything downstream that needs annual factor returns should read the published annual section directly, not compound the monthly one.
 
 ## Where this sits
