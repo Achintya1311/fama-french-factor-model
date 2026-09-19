@@ -2,7 +2,7 @@
 
 Decomposes returns into market, size, value and momentum exposures to test whether an apparent edge is alpha or just beta wearing a disguise.
 
-**Status:** Last checkpoint 2026-09-18 · Next: Day 2 - CAPM baseline regression: alpha, t-statistic, R-squared
+**Status:** Last checkpoint 2026-09-19 · Next: Day 3 - FF3, then FF5 plus momentum; report how alpha decays as factors are added
 
 ## What this is
 
@@ -68,6 +68,7 @@ to 1e-9 - the only way that isn't a bug in the OLS wiring.
 <!-- CHECKPOINTS:START -->
 | Date | Commit | What changed | Next |
 |------|--------|--------------|------|
+| 2026-09-19 | `71a2758` | Day 2: CAPM baseline regression (factors/capm.py) - OLS of portfolio excess return on Mkt-RF, alpha/beta/t-stats/R-squared. Test portfolios are the Ken French 10 Industry Portfolios (new fixture, factors/industry.py, fetched via scripts/fetch_industry_portfolios.py), standing in for the yfinance portfolios sketched in the plan at zero cost. Regression machinery validated first against an exact known answer (market-on-itself: alpha=0, beta=1, R2=1 to 1e-9), then run on all 10 industries via 'python -m factors.regress --portfolio <name> --model capm'; results land where intuition says they should (NoDur/Utils low beta, Durbl/HiTec high beta). Two industries show a plain-OLS-significant alpha but that t-stat is not yet Newey-West-corrected (Day 4), so README records it as provisional. 21/21 tests pass (pytest), CLI run by hand against all 10 industries plus the bad-argument path. Found and fixed both this repo's and the hub's local main branches stuck in the same recurring stale-detached-HEAD issue before committing. | Day 3 - FF3, then FF5 plus momentum; report how alpha decays as factors are added |
 | 2026-09-18 | `49966a5` | Day 1: Ken French loader (factors/kenfrench.py) parses the Data Library's real monthly+annual CSV off a committed fixture (fixtures/ken_french/, refreshed via scripts/fetch_ken_french.py). Cross-checking the two sections found a genuine quirk, not a bug: RF compounds monthly to annual within 0.03pp, but SMB/HML don't (up to 21pp off in 2020) since they're annually-reconstituted long/short portfolios, not one held-all-year position -- recorded in the README limitations. 9/9 tests pass (pytest), fetch script run by hand and reproduces the committed fixture byte-for-byte. | Day 2 - CAPM baseline regression: alpha, t-statistic, R-squared |
 <!-- CHECKPOINTS:END -->
 
