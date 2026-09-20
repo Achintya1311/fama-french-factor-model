@@ -40,16 +40,26 @@ provenance and format notes on both files.
 uv venv && source .venv/bin/activate
 uv pip install -r requirements.txt
 python -m factors.regress --portfolio hitec --model capm    # or ff3, ff5mom
+python -m factors.regress --portfolio hitec --model ff5mom --diagnostics  # + Newey-West/autocorr/heteroskedasticity
 python -m factors.decay_report                              # all 10 industries x all 3 models
+python -m factors.decay_report --since 1963-07               # same, restricted to FF5+Mom's own window
+python -m factors.rolling_report                             # 60-month trailing CAPM beta, all 10 industries
 ```
 
 `--portfolio` takes one of the 10 Ken French industry portfolios (NoDur,
 Durbl, Manuf, Enrgy, HiTec, Telcm, Shops, Hlth, Utils, Other), the CAPM/FF3/
 FF5 test assets - not yet a path to an arbitrary returns CSV. `--model` is
 `capm` (Mkt-RF), `ff3` (+ SMB, HML), or `ff5mom` (+ RMW, CMA, Mom).
-`factors.decay_report` runs all three models against all ten industries and
-writes `outputs/alpha_decay.csv`. Runs entirely offline against committed
-fixtures; nothing here needs network access or a key.
+`--diagnostics` adds a Day 4 block: Newey-West-corrected alpha t-stat,
+Ljung-Box residual-autocorrelation test, Breusch-Pagan heteroskedasticity
+test. `factors.decay_report` runs all three models against all ten
+industries (plus the same diagnostics columns) and writes
+`outputs/alpha_decay.csv`; `--since YYYY-MM` restricts every model to the
+same start month, for isolating a factor-count effect from a sample-window
+effect. `factors.rolling_report` writes a trailing-window CAPM beta series
+per industry to `outputs/rolling_betas.csv` (`--window` to change the
+default 60 months). Runs entirely offline against committed fixtures;
+nothing here needs network access or a key.
 
 ## Findings
 
@@ -96,6 +106,53 @@ re-run restricted to 1963-2026) is the honest fix and is Day 4/5 scope,
 not done yet. Reported as-is rather than reframed to fit the expected
 story - see Limitations.
 
+**Day 4 - diagnostics, and isolating Day 3's window confound.**
+`factors/diagnostics.py` adds Newey-West (HAC) alpha t-stats, a Ljung-Box
+test for residual autocorrelation, a Breusch-Pagan test for
+heteroskedasticity, and a rolling CAPM beta, on top of the plain-OLS
+regressions `capm.py`/`multifactor.py` already run - `factors/regress.py
+--diagnostics` prints them for one portfolio, `factors/decay_report.py`
+adds them as extra columns across all 30 industry/model combinations, and
+`factors/rolling_report.py` reports a 60-month trailing beta per industry.
+
+The Newey-West correction is not cosmetic: **NoDur's FF3 alpha flips from
+plain-OLS-significant (t=2.20) to Newey-West-insignificant (t=1.92)** -
+exactly the "read the plain t-stat as optimistic, not final" warning both
+`capm.py`'s and `multifactor.py`'s own docstrings already carried. Across
+all 30 industry x model rows, 16 (53%) show significant residual
+autocorrelation at a 12-month Ljung-Box lag and 20 (67%) show
+heteroskedasticity - both diagnostics that make a plain-OLS t-stat
+unreliable are common in this dataset, not edge cases. Not one row gained
+significance under the Newey-West correction (only lost it or stayed the
+same), consistent with the standard result that positive serial
+correlation inflates OLS t-stats rather than deflating them.
+
+Rolling 60-month CAPM betas (`outputs/rolling_betas.csv`) show market
+exposure is not a stable per-industry constant: Durbl's beta ranges from
+0.75 to 2.06 across the sample, Telcm from 0.27 to 1.38. The most recent
+window's beta lines up reasonably with Day 2's full-sample beta for most
+industries (HiTec: 1.26 rolling vs 1.23 full-sample) - a sanity check that
+the two methods agree on the same portfolio, not evidence that beta is
+actually constant.
+
+**The window-isolation re-run (`--since 1963-07`, matching FF5+Mom's own
+start) answers Day 3's open question, and the answer is "both."**
+Restricting CAPM and FF3 to the same 757-month window FF5+Mom already runs
+on: HiTec's CAPM alpha stays small and insignificant (+0.26%, t=0.17), but
+FF3's alpha - which was insignificant in the mismatched full-window
+comparison (+1.51%, t=1.55) - becomes significant once window-matched
+(+2.69%, t=2.17). So part of Day 3's "alpha grows as factors are added"
+finding for HiTec was genuinely a window artifact: comparing FF3 on 1,201
+months to FF5+Mom on 757 was misleading. But the growth doesn't stop
+there - FF5+Mom's alpha (+5.44%, t=4.32) is still well above the
+window-matched FF3 figure, on the *identical* 757 months. That residual
+growth cannot be a window effect, since the window is now held fixed; it
+has to be the RMW/CMA/Mom loadings themselves pulling alpha up. The honest
+summary: Day 3's HiTec finding was partly a confound (window) and partly
+real (factors) - neither the original "alpha shrinks with more factors"
+story nor a claim that the whole Day 3 finding was an artifact is
+correct on its own.
+
 ## Checkpoint log
 
 <!-- CHECKPOINTS:START -->
@@ -109,10 +166,13 @@ story - see Limitations.
 ## Limitations and what would make me wrong
 
 - Ken French factors are constructed on US data. Applying them to NSE names is an approximation that needs stating every time.
-- Overlapping windows inflate t-statistics, so Newey-West standard errors are used throughout. **Not true yet for Day 2's CAPM baseline** - `factors/capm.py` currently reports plain OLS t-stats, which is exactly the kind of inflated t-stat this bullet warns about. Two of the ten industries flag as significant under that non-robust test; treat that as provisional until Day 4 adds the Newey-West correction.
+- Overlapping windows inflate t-statistics. **`factors/capm.py` and `factors/multifactor.py` still report plain-OLS t-stats by design** - Day 4 added the Newey-West correction as a separate, additive module (`factors/diagnostics.py`, surfaced via `regress.py --diagnostics` and `decay_report.py`'s extra columns) rather than changing what those two dataclasses return, so any code that reads `CAPMResult.significant` or `FactorResult.significant` directly still gets the non-robust flag; only the diagnostics path gives the corrected one. One industry/model pair (NoDur, FF3) flips from significant to not once Newey-West is applied; see Findings for the count across all 30 rows.
+- **The Ljung-Box and Breusch-Pagan tests use fixed defaults (a 12-month lag, a 5% threshold) that were not tuned per portfolio.** They're reasonable choices for monthly data, not a claim that 12 months is the right horizon for every industry's autocorrelation structure.
+- **The Newey-West lag itself follows an automatic rule (Newey & West 1994's `floor(4*(n/100)**(2/9))`), not a cross-validated or per-series choice.** Standard practice, but still a formula substituting for judgment about how much serial dependence actually needs correcting.
+- **Rolling betas use one fixed 60-month window** (`factors/rolling_report.py --window` to change it) - no sensitivity check across window lengths, and no confidence bands on the rolling estimate yet (that's Day 6's job, per NEXT_STEPS.md).
 - The 10 industry portfolios (`factors/industry.py`) are US-constructed test assets, not a Stock Stalker/NSE universe - useful for proving the regression machinery is correct, not for saying anything about NSE names yet. That comes on Day 5, applied to Stock Stalker's own screen output, with the same US-factors-on-NSE-names caveat repeated there.
 - Testing several specifications on one dataset is multiple testing. The alpha that survives all of them is the only one worth quoting.
-- **The Day 3 CAPM -> FF3 -> FF5+Mom comparison is confounded by sample window, not just factor count.** FF5 data starts 1963-07 (RMW/CMA need data CRSP/Compustat doesn't have further back), so FF5+Mom regressions run on 757 months (1963-2026) against CAPM/FF3's 1,201 (1926-2026) - a shorter, more tech-heavy, post-1963 America. HiTec's alpha *growing* from +0.57% (CAPM) to +5.44% and turning significant (FF5+Mom) is reported honestly rather than smoothed into the "alpha shrinks as factors are added" story the plan expected; a same-window FF3 re-run restricted to 1963-2026 would isolate factor effect from window effect and hasn't been done yet.
+- **Day 3's CAPM -> FF3 -> FF5+Mom comparison was confounded by sample window, not just factor count - Day 4's `--since 1963-07` re-run isolates the two, and the answer is "both mattered."** Window-matching FF3 to FF5+Mom's own 757-month range turns HiTec's FF3 alpha significant (t=1.55 -> t=2.17) that wasn't significant in the original mismatched comparison, so part of Day 3's finding was a window artifact. But FF5+Mom's alpha (t=4.32) still exceeds the window-matched FF3 figure on the *identical* 757 months, so the rest of the growth is a genuine RMW/CMA/Mom effect, not more window artifact. Only tested at this single cutoff (FF5+Mom's own start); other windows not explored.
 - **Day 3's correctness gate does not replicate an actual published academic figure.** This sandbox has no internet access to a journal's FF3/FF5 replication table, so "replicates a known result" is instead each Fama-French factor's exact analytical self-loading (SMB/HML on FF3, RMW/Mom on FF5+Mom: alpha=0, own loading=1, all others=0, R²=1 to 1e-9) - a real identity check, not an estimate, but not the same evidentiary bar as matching a peer-reviewed number.
 - **Compounding monthly SMB/HML to a year does not reproduce French's published annual figure**, and the gap is not small: measured across all 99 complete years in the fixture, the worst case (HML, 2020) is 21 percentage points off. RF (a real return) compounds to within 0.03pp, so this isn't a parser bug - it's the annually-reconstituted long/short portfolios' own arithmetic, most likely reflecting month-to-month changes in the underlying six size/book-to-market portfolios rather than one fixed portfolio held all year. `factors.kenfrench.annual_compounding_gaps` therefore checks RF tightly but only sanity-checks SMB/HML/Mkt-RF loosely (catches a wrong column or a forgotten /100, not fine-grained correctness). Anything downstream that needs annual factor returns should read the published annual section directly, not compound the monthly one.
 
