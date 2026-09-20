@@ -1,0 +1,50 @@
+{
+  "schema": "v1",
+  "generated": "2026-09-20",
+  "universe": "NSE",
+  "source": "fixtures",
+  "candidates": [
+    {
+      "ticker": "RELIANCE.NS",
+      "score": 0.526,
+      "signals": {
+        "trend": 0.054,
+        "momentum": 0.0713,
+        "volume": 0.022
+      },
+      "liquidity": {
+        "adv_20d": 10498450.45,
+        "turnover_20d": 13714343560.03
+      },
+      "rank": 1
+    },
+    {
+      "ticker": "TATACHEM.NS",
+      "score": 0.4231,
+      "signals": {
+        "trend": -0.4044,
+        "momentum": -0.0883,
+        "volume": 0.1553
+      },
+      "liquidity": {
+        "adv_20d": 601751.9,
+        "turnover_20d": 391457878.29
+      },
+      "rank": 2
+    },
+    {
+      "ticker": "CROMPTON.NS",
+      "score": 0.3286,
+      "signals": {
+        "trend": -0.4382,
+        "momentum": -0.3806,
+        "volume": -0.1373
+      },
+      "liquidity": {
+        "adv_20d": 3982584.75,
+        "turnover_20d": 962609864.24
+      },
+      "rank": 3
+    }
+  ]
+}

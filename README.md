@@ -34,6 +34,18 @@ portfolios sketched in the original plan (no key needed, so it's the
 zero-spend, no-network path). See `fixtures/ken_french/README.md` for
 provenance and format notes on both files.
 
+- Stock Stalker's own screen output and OHLCV fixtures - a committed
+  snapshot, not a live read of the sibling repo
+
+`factors/screen_check.py` reads `fixtures/stockstalker/screen_2026-09-20.json`
+(Stock Stalker's `schema/v1` screen contract) and the three OHLCV CSVs
+behind it under `fixtures/stockstalker/ohlcv/`, both copied in as-is from
+`STOCKSTALKER/outputs/` and `STOCKSTALKER/fixtures/ohlcv/`. Committing the
+snapshot here (rather than reading the other checkout by relative path)
+follows the same file-contract discipline the hub uses everywhere else:
+this repo's tests never depend on `STOCKSTALKER` being checked out
+alongside it, and never will unless the screen genuinely needs refreshing.
+
 ## How to run
 
 ```bash
@@ -44,6 +56,8 @@ python -m factors.regress --portfolio hitec --model ff5mom --diagnostics  # + Ne
 python -m factors.decay_report                              # all 10 industries x all 3 models
 python -m factors.decay_report --since 1963-07               # same, restricted to FF5+Mom's own window
 python -m factors.rolling_report                             # 60-month trailing CAPM beta, all 10 industries
+python -m factors.screen_check --model capm                  # Stock Stalker's screen vs Ken French factors
+python -m factors.screen_check --model ff5mom --diagnostics  # same, FF5+Mom + Newey-West block
 ```
 
 `--portfolio` takes one of the 10 Ken French industry portfolios (NoDur,
@@ -58,8 +72,12 @@ industries (plus the same diagnostics columns) and writes
 same start month, for isolating a factor-count effect from a sample-window
 effect. `factors.rolling_report` writes a trailing-window CAPM beta series
 per industry to `outputs/rolling_betas.csv` (`--window` to change the
-default 60 months). Runs entirely offline against committed fixtures;
-nothing here needs network access or a key.
+default 60 months). `factors.screen_check` regresses each candidate in
+Stock Stalker's committed screen snapshot (`--screen`, `--ohlcv-dir` to
+point elsewhere) against Ken French's factors under `--model`
+(capm/ff3/ff5mom), with the same `--diagnostics` block, and reports
+whether any candidate's alpha survives adjustment. Runs entirely offline
+against committed fixtures; nothing here needs network access or a key.
 
 ## Findings
 
@@ -153,6 +171,31 @@ real (factors) - neither the original "alpha shrinks with more factors"
 story nor a claim that the whole Day 3 finding was an artifact is
 correct on its own.
 
+**Day 5 - pointed at Stock Stalker's own screen, and the honest answer is
+"the test is too small to say."** `factors/screen_check.py` reads Stock
+Stalker's `screen_2026-09-20.json` (3 NSE candidates: RELIANCE.NS,
+TATACHEM.NS, CROMPTON.NS, ranked by technical score - a snapshot committed
+here under `fixtures/stockstalker/` alongside the OHLCV fixtures behind it,
+so this never depends on the two repos being checked out together) and
+runs each candidate's monthly returns through CAPM, FF3, and FF5+Mom
+against Ken French's factors. Every model on every candidate comes back
+insignificant, plain-OLS and Newey-West alike (CAPM alpha, annualized:
+RELIANCE -9.98% t=-0.64, TATACHEM -34.31% t=-1.53, CROMPTON -28.78%
+t=-1.43; FF3 and FF5+Mom move the point estimates but not the
+insignificance - none crosses |t|>1.96 under either standard error).
+That is **not** the clean "the edge was beta, adjustment killed it" story
+Day 3's traps anticipated: the honest limiter is that Stock Stalker's
+OHLCV fixtures only span 2024-09 to 2026-09, and Ken French's own factor
+fixture stops 2026-07, leaving 22 overlapping months to estimate up to
+seven parameters (FF5+Mom). Twenty-two months is not enough data to reject
+*or* confirm an alpha of any plausible size - "insignificant" here mostly
+means "underpowered," not "the edge is beta." One directionally suggestive
+but statistically meaningless pattern: the technical score's own ranking
+(RELIANCE > TATACHEM > CROMPTON) matches the ordering of least-to-most
+negative CAPM alpha, which is at least not *inconsistent* with the screen
+carrying information, but with n=22 this is not evidence of anything - see
+Limitations.
+
 ## Checkpoint log
 
 <!-- CHECKPOINTS:START -->
@@ -171,7 +214,10 @@ correct on its own.
 - **The Ljung-Box and Breusch-Pagan tests use fixed defaults (a 12-month lag, a 5% threshold) that were not tuned per portfolio.** They're reasonable choices for monthly data, not a claim that 12 months is the right horizon for every industry's autocorrelation structure.
 - **The Newey-West lag itself follows an automatic rule (Newey & West 1994's `floor(4*(n/100)**(2/9))`), not a cross-validated or per-series choice.** Standard practice, but still a formula substituting for judgment about how much serial dependence actually needs correcting.
 - **Rolling betas use one fixed 60-month window** (`factors/rolling_report.py --window` to change it) - no sensitivity check across window lengths, and no confidence bands on the rolling estimate yet (that's Day 6's job, per NEXT_STEPS.md).
-- The 10 industry portfolios (`factors/industry.py`) are US-constructed test assets, not a Stock Stalker/NSE universe - useful for proving the regression machinery is correct, not for saying anything about NSE names yet. That comes on Day 5, applied to Stock Stalker's own screen output, with the same US-factors-on-NSE-names caveat repeated there.
+- The 10 industry portfolios (`factors/industry.py`) are US-constructed test assets, not a Stock Stalker/NSE universe - useful for proving the regression machinery is correct, not for saying anything about NSE names yet.
+- **Day 5's screen-check regression has only 22 overlapping months (2024-10 to 2026-07, bounded by Stock Stalker's OHLCV fixture window on one side and Ken French's factor fixture on the other) to estimate up to 7 parameters (FF5+Mom).** Every candidate came back insignificant under every model, but with this few observations "insignificant" mostly means the test lacks the power to detect anything short of an implausibly large alpha - it is not evidence the screen's edge is beta in disguise, just an absence of evidence either way. A real answer needs years more OHLCV history than this sandbox's fixtures carry.
+- **Day 5 regresses INR-denominated NSE closing prices directly against USD-denominated Ken French factors, with no currency adjustment.** USD/INR moves are folded into the "raw" NSE return series, mislabeled as US-factor exposure or alpha. Combined with the point above (US factors are already an approximation for Indian names), this makes Day 5's alpha estimates directional at best, not a number to trade on.
+- Stock Stalker's screen only ever ranks 3 tickers (its committed OHLCV fixture universe), so Day 5's "does the screen's ranking survive" question is answered on n=3 candidates - too few to say anything about the screening *methodology* in general, only about these three names in this window.
 - Testing several specifications on one dataset is multiple testing. The alpha that survives all of them is the only one worth quoting.
 - **Day 3's CAPM -> FF3 -> FF5+Mom comparison was confounded by sample window, not just factor count - Day 4's `--since 1963-07` re-run isolates the two, and the answer is "both mattered."** Window-matching FF3 to FF5+Mom's own 757-month range turns HiTec's FF3 alpha significant (t=1.55 -> t=2.17) that wasn't significant in the original mismatched comparison, so part of Day 3's finding was a window artifact. But FF5+Mom's alpha (t=4.32) still exceeds the window-matched FF3 figure on the *identical* 757 months, so the rest of the growth is a genuine RMW/CMA/Mom effect, not more window artifact. Only tested at this single cutoff (FF5+Mom's own start); other windows not explored.
 - **Day 3's correctness gate does not replicate an actual published academic figure.** This sandbox has no internet access to a journal's FF3/FF5 replication table, so "replicates a known result" is instead each Fama-French factor's exact analytical self-loading (SMB/HML on FF3, RMW/Mom on FF5+Mom: alpha=0, own loading=1, all others=0, R²=1 to 1e-9) - a real identity check, not an estimate, but not the same evidentiary bar as matching a peer-reviewed number.
