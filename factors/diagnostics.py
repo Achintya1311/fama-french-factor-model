@@ -135,3 +135,57 @@ def rolling_beta(
     betas.name = f"beta_{factor_column}"
     betas.index.name = "month"
     return betas
+
+
+@dataclass(frozen=True)
+class RollingLoadingsResult:
+    factor_columns: tuple[str, ...]
+    params: pd.DataFrame  # one column per factor, index = window end month
+    se: pd.DataFrame  # same shape, standard error of each loading
+
+
+def rolling_loadings(
+    portfolio_monthly: pd.Series,
+    factors_monthly: pd.DataFrame,
+    factor_columns: tuple[str, ...],
+    window: int = 60,
+) -> RollingLoadingsResult:
+    """Trailing ``window``-month multi-factor loadings, refit at every month (Day 6).
+
+    Generalizes ``rolling_beta`` from a single factor to an arbitrary set
+    (FF3, FF5+Mom), and additionally returns each loading's standard error
+    so a caller can draw a confidence band, not just the point estimate.
+
+    Those standard errors are plain OLS, not Newey-West: ``RollingOLS.fit``
+    only accepts ``cov_type`` of 'nonrobust', 'HC0', or 'HCCM' (statsmodels
+    raises ``ValueError`` for 'HAC'), so the overlapping-window inflation
+    caveat that already applies to ``capm.py``/``multifactor.py``'s
+    full-sample t-stats applies here too, with no diagnostics-style fix
+    available for the rolling case.
+    """
+    aligned = align_excess_returns(portfolio_monthly, factors_monthly, factor_columns)
+    columns = list(factor_columns)
+    if len(aligned) < window:
+        empty = pd.DataFrame(columns=columns, dtype=float).rename_axis("month")
+        return RollingLoadingsResult(factor_columns=tuple(factor_columns), params=empty, se=empty.copy())
+    X = sm.add_constant(aligned[columns])
+    fitted = RollingOLS(aligned["excess"], X, window=window, min_nobs=window).fit()
+    params = fitted.params[columns].dropna()
+    se = fitted.bse[columns].loc[params.index]
+    params.index.name = "month"
+    se.index.name = "month"
+    return RollingLoadingsResult(factor_columns=tuple(factor_columns), params=params, se=se)
+
+
+def confidence_band(
+    params: pd.DataFrame, se: pd.DataFrame, z: float = 1.96
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """(lower, upper) Wald band around each rolling loading: params +/- z*se.
+
+    ``z=1.96`` is the usual 95% two-sided normal critical value - a large-
+    sample approximation, reasonable at a 60-month window but not exact.
+    Inherits ``rolling_loadings``'s plain-OLS (non-Newey-West) caveat: these
+    bands are narrower than they would be if overlapping-window serial
+    correlation were corrected for, same as any other plain-OLS SE here.
+    """
+    return params - z * se, params + z * se

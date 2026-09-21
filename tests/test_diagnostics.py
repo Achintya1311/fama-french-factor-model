@@ -2,7 +2,13 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from factors.diagnostics import newey_west_lag, rolling_beta, run_diagnostics
+from factors.diagnostics import (
+    confidence_band,
+    newey_west_lag,
+    rolling_beta,
+    rolling_loadings,
+    run_diagnostics,
+)
 
 
 def _synthetic_factors(n=240, seed=0):
@@ -112,3 +118,75 @@ def test_rolling_beta_requires_a_full_window():
     portfolio = factors["mkt_rf"] + factors["rf"]
     betas = rolling_beta(portfolio, factors, window=24)
     assert betas.empty
+
+
+def _synthetic_multifactor(n=240, seed=0):
+    rng = np.random.default_rng(seed)
+    index = pd.period_range("2000-01", periods=n, freq="M")
+    return pd.DataFrame(
+        {
+            "mkt_rf": rng.normal(0.005, 0.04, n),
+            "smb": rng.normal(0.0, 0.03, n),
+            "hml": rng.normal(0.0, 0.03, n),
+            "rf": 0.001,
+        },
+        index=index,
+    )
+
+
+def test_rolling_loadings_recovers_a_regime_shift_across_factors():
+    # mkt_rf loading 0.5 -> 1.5 and smb loading 1.0 -> 0.0 at the halfway
+    # point, no noise: a 24-month rolling window should read close to each
+    # regime's own loadings well inside it, for every requested factor at
+    # once (rolling_beta only ever proved this for a single factor).
+    n = 120
+    factors = _synthetic_multifactor(n=n, seed=10)
+    mkt_beta = pd.Series([0.5] * (n // 2) + [1.5] * (n // 2), index=factors.index)
+    smb_beta = pd.Series([1.0] * (n // 2) + [0.0] * (n // 2), index=factors.index)
+    portfolio = mkt_beta * factors["mkt_rf"] + smb_beta * factors["smb"] + factors["rf"]
+
+    result = rolling_loadings(portfolio, factors, ("mkt_rf", "smb"), window=24)
+
+    assert result.factor_columns == ("mkt_rf", "smb")
+    assert len(result.params) == n - 24 + 1
+    assert result.params["mkt_rf"].iloc[10] == pytest.approx(0.5, abs=1e-6)
+    assert result.params["mkt_rf"].iloc[-1] == pytest.approx(1.5, abs=1e-6)
+    assert result.params["smb"].iloc[10] == pytest.approx(1.0, abs=1e-6)
+    assert result.params["smb"].iloc[-1] == pytest.approx(0.0, abs=1e-6)
+    # Zero noise means an exact fit and (numerically) a zero standard error,
+    # for any window sitting entirely inside one regime - a window straddling
+    # the regime change is fitting two different true loadings at once, so
+    # it's expected to have nonzero residual/SE and is deliberately not
+    # checked here.
+    assert result.se["mkt_rf"].iloc[10] == pytest.approx(0.0, abs=1e-6)
+    assert result.se["mkt_rf"].iloc[-1] == pytest.approx(0.0, abs=1e-6)
+    assert result.se["smb"].iloc[10] == pytest.approx(0.0, abs=1e-6)
+    assert result.se["smb"].iloc[-1] == pytest.approx(0.0, abs=1e-6)
+    assert list(result.se.columns) == ["mkt_rf", "smb"]
+    assert result.se.index.equals(result.params.index)
+
+
+def test_rolling_loadings_requires_a_full_window():
+    factors = _synthetic_multifactor(n=10, seed=11)
+    portfolio = factors["mkt_rf"] + factors["rf"]
+    result = rolling_loadings(portfolio, factors, ("mkt_rf", "smb"), window=24)
+    assert result.params.empty
+    assert result.se.empty
+    assert list(result.params.columns) == ["mkt_rf", "smb"]
+
+
+def test_confidence_band_brackets_the_point_estimate_and_widens_with_z():
+    factors = _synthetic_multifactor(n=300, seed=12)
+    rng = np.random.default_rng(13)
+    noise = rng.normal(0, 0.02, len(factors))
+    portfolio = 0.001 + 1.0 * factors["mkt_rf"] + 0.3 * factors["smb"] + factors["rf"] + noise
+
+    result = rolling_loadings(portfolio, factors, ("mkt_rf", "smb"), window=60)
+    lower, upper = confidence_band(result.params, result.se)
+
+    assert (lower <= result.params).all().all()
+    assert (result.params <= upper).all().all()
+
+    wide_lower, wide_upper = confidence_band(result.params, result.se, z=3.0)
+    assert (wide_lower <= lower).all().all()
+    assert (wide_upper >= upper).all().all()

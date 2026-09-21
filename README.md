@@ -196,6 +196,31 @@ negative CAPM alpha, which is at least not *inconsistent* with the screen
 carrying information, but with n=22 this is not evidence of anything - see
 Limitations.
 
+**Day 6 - rolling factor loadings finally get a confidence band, and the
+bands say the three FF3 loadings aren't equally trustworthy.**
+`factors/diagnostics.py` gains `rolling_loadings` (generalizing Day 4's
+single-factor `rolling_beta` to an arbitrary factor set) and
+`confidence_band` (a 95% Wald band, `loading +/- 1.96*se`); `factors/
+rolling_chart.py` charts both for one industry at a time
+(`python -m factors.rolling_chart --portfolio hitec`), writing a PNG (one
+subplot per factor) and the underlying loadings+SE table to `outputs/`.
+Run on HiTec's 60-month rolling FF3 loadings (1,142 windows, 1931-06 to
+2026-07): mkt_rf's band **excludes zero in all 1,142 windows** (avg width
+0.31) - unsurprising, since a near-zero market beta would be a strange
+result for a tech-heavy industry portfolio to ever produce, but a real
+confirmation the band isn't uselessly wide. hml's band excludes zero in
+868/1,142 windows (76%, avg width 0.50) - the loading swings from about 0
+to -1.39 over the sample (matching Day 4's rolling-beta-style read of
+"exposure isn't a stable constant"), and most of that swing is outside
+the band, not band noise. smb is the one that doesn't hold up as well:
+its band excludes zero in only 351/1,142 windows (31%, avg width 0.51) -
+so for roughly 7 windows in 10, HiTec's rolling SMB loading is not
+statistically distinguishable from flat exposure, even though the point
+estimate itself ranges from -0.33 to +0.60. Reading the point estimate's
+full range as "SMB loading varies a lot" without the band would overstate
+how much of the visible wiggle is real versus estimation noise -
+precisely the failure mode a confidence band exists to catch.
+
 ## Checkpoint log
 
 <!-- CHECKPOINTS:START -->
@@ -214,7 +239,9 @@ Limitations.
 - Overlapping windows inflate t-statistics. **`factors/capm.py` and `factors/multifactor.py` still report plain-OLS t-stats by design** - Day 4 added the Newey-West correction as a separate, additive module (`factors/diagnostics.py`, surfaced via `regress.py --diagnostics` and `decay_report.py`'s extra columns) rather than changing what those two dataclasses return, so any code that reads `CAPMResult.significant` or `FactorResult.significant` directly still gets the non-robust flag; only the diagnostics path gives the corrected one. One industry/model pair (NoDur, FF3) flips from significant to not once Newey-West is applied; see Findings for the count across all 30 rows.
 - **The Ljung-Box and Breusch-Pagan tests use fixed defaults (a 12-month lag, a 5% threshold) that were not tuned per portfolio.** They're reasonable choices for monthly data, not a claim that 12 months is the right horizon for every industry's autocorrelation structure.
 - **The Newey-West lag itself follows an automatic rule (Newey & West 1994's `floor(4*(n/100)**(2/9))`), not a cross-validated or per-series choice.** Standard practice, but still a formula substituting for judgment about how much serial dependence actually needs correcting.
-- **Rolling betas use one fixed 60-month window** (`factors/rolling_report.py --window` to change it) - no sensitivity check across window lengths, and no confidence bands on the rolling estimate yet (that's Day 6's job, per NEXT_STEPS.md).
+- **Rolling betas/loadings use one fixed 60-month window by default** (`factors/rolling_report.py --window` / `factors/rolling_chart.py --window` to change it) - no sensitivity check across window lengths has been run.
+- **Day 6's rolling confidence bands are plain-OLS (Wald), not Newey-West.** `statsmodels.regression.rolling.RollingOLS.fit` only accepts `cov_type` of `'nonrobust'`, `'HC0'`, or `'HCCM'` - it raises `ValueError` on `'HAC'` - so there is no drop-in fix analogous to Day 4's `diagnostics.py` for the rolling case. Overlapping monthly windows are serially correlated, which the full-sample Newey-West caveat already flags; that same inflation risk applies to every rolling band `rolling_chart.py` draws, uncorrected. The bands are still useful for telling "point estimate moves a lot but stays inside a wide band" from "point estimate moves outside its own band" (Day 6's HiTec SMB-vs-HML finding is exactly that contrast), just not for a precise coverage-rate claim.
+- `factors/rolling_chart.py` charts one industry and one model (FF3 or FF5+Mom) per invocation - no batch mode across all 10 industries the way `rolling_report.py`/`decay_report.py` have.
 - The 10 industry portfolios (`factors/industry.py`) are US-constructed test assets, not a Stock Stalker/NSE universe - useful for proving the regression machinery is correct, not for saying anything about NSE names yet.
 - **Day 5's screen-check regression has only 22 overlapping months (2024-10 to 2026-07, bounded by Stock Stalker's OHLCV fixture window on one side and Ken French's factor fixture on the other) to estimate up to 7 parameters (FF5+Mom).** Every candidate came back insignificant under every model, but with this few observations "insignificant" mostly means the test lacks the power to detect anything short of an implausibly large alpha - it is not evidence the screen's edge is beta in disguise, just an absence of evidence either way. A real answer needs years more OHLCV history than this sandbox's fixtures carry.
 - **Day 5 regresses INR-denominated NSE closing prices directly against USD-denominated Ken French factors, with no currency adjustment.** USD/INR moves are folded into the "raw" NSE return series, mislabeled as US-factor exposure or alpha. Combined with the point above (US factors are already an approximation for Indian names), this makes Day 5's alpha estimates directional at best, not a number to trade on.
