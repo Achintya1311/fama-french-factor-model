@@ -58,6 +58,8 @@ python -m factors.decay_report --since 1963-07               # same, restricted 
 python -m factors.rolling_report                             # 60-month trailing CAPM beta, all 10 industries
 python -m factors.screen_check --model capm                  # Stock Stalker's screen vs Ken French factors
 python -m factors.screen_check --model ff5mom --diagnostics  # same, FF5+Mom + Newey-West block
+python -m factors.pipeline_audit                              # Day 7: look-ahead + multiple-testing audit
+python -m factors.pipeline_audit --alpha 0.10                # same, at a looser significance level
 ```
 
 `--portfolio` takes one of the 10 Ken French industry portfolios (NoDur,
@@ -78,6 +80,15 @@ point elsewhere) against Ken French's factors under `--model`
 (capm/ff3/ff5mom), with the same `--diagnostics` block, and reports
 whether any candidate's alpha survives adjustment. Runs entirely offline
 against committed fixtures; nothing here needs network access or a key.
+`factors.pipeline_audit` (Day 7) checks two structural properties
+mechanically rather than by inspection - that every rolling estimate is
+trailing-only (truncating the series after month *i* never changes the
+value reported for month *i*) and that every factor-alignment join is by
+month label, not row order - then Bonferroni/BH-corrects every t-stat
+`decay_report`/`screen_check` have reported so far and prints how many
+survive. Exits 1 only on a look-ahead/alignment violation; a multiple-
+testing result where nothing survives correction is an expected finding,
+not a pipeline failure.
 
 ## Findings
 
@@ -221,6 +232,37 @@ full range as "SMB loading varies a lot" without the band would overstate
 how much of the visible wiggle is real versus estimation noise -
 precisely the failure mode a confidence band exists to catch.
 
+**Day 7 - pipeline audit: look-ahead is clean, multiple testing is not.**
+`factors/pipeline_audit.py` runs two structural checks. Look-ahead:
+truncate the aligned series after month *i* and confirm `rolling_beta`/
+`rolling_loadings` still report the same value for month *i* - checked on
+HiTec's rolling CAPM/FF3/FF5+Mom loadings, clean (0 violations). Alignment:
+shuffle the factor table's row order and confirm `align_excess_returns`
+still returns the identical joined frame - checked on both `capm.py`'s and
+`multifactor.py`'s join, against both the Ken French industry data and
+Stock Stalker's screen candidates, also clean. Both checks were verified
+against a manufactured negative control before trusting the clean result on
+real data (a synthetic rolling series shifted 6 months into the future, and
+a synthetic positional join) - the audit does detect a real violation when
+one exists (see `tests/test_pipeline_audit.py`), it isn't just passing
+because nothing is checked.
+
+Multiple testing is the actual finding. Applying Bonferroni and
+Benjamini-Hochberg correction to every t-stat `decay_report`/`screen_check`
+have reported so far: `decay_report`'s 30 industry/model rows go from 8
+raw-significant (OLS, p<0.05) to **2 surviving Bonferroni** (HiTec/FF5+Mom,
+Other/FF3) and 4 surviving Benjamini-Hochberg; the Newey-West reading moves
+7 raw-significant to the same 2 Bonferroni survivors and 5 BH survivors.
+`screen_check`'s 9 ticker/model rows go from 0 (OLS) or 1 (Newey-West,
+TATACHEM.NS/capm) raw-significant to 0 surviving either correction - the
+one Newey-West "significant" reading among Stock Stalker's three candidates
+does not survive being one test among nine. HiTec/FF5+Mom - the industry
+Day 3's checkpoint already flagged as the one case where alpha *grew* with
+more factors instead of shrinking - is the only industry/model pair that
+survives the strictest correction across every reading. That doesn't make
+it real; with only two corrections and one dataset, it just means it's the
+single candidate this repo's own multiple-testing check cannot rule out.
+
 ## Checkpoint log
 
 <!-- CHECKPOINTS:START -->
@@ -247,7 +289,9 @@ precisely the failure mode a confidence band exists to catch.
 - **Day 5's screen-check regression has only 22 overlapping months (2024-10 to 2026-07, bounded by Stock Stalker's OHLCV fixture window on one side and Ken French's factor fixture on the other) to estimate up to 7 parameters (FF5+Mom).** Every candidate came back insignificant under every model, but with this few observations "insignificant" mostly means the test lacks the power to detect anything short of an implausibly large alpha - it is not evidence the screen's edge is beta in disguise, just an absence of evidence either way. A real answer needs years more OHLCV history than this sandbox's fixtures carry.
 - **Day 5 regresses INR-denominated NSE closing prices directly against USD-denominated Ken French factors, with no currency adjustment.** USD/INR moves are folded into the "raw" NSE return series, mislabeled as US-factor exposure or alpha. Combined with the point above (US factors are already an approximation for Indian names), this makes Day 5's alpha estimates directional at best, not a number to trade on.
 - Stock Stalker's screen only ever ranks 3 tickers (its committed OHLCV fixture universe), so Day 5's "does the screen's ranking survive" question is answered on n=3 candidates - too few to say anything about the screening *methodology* in general, only about these three names in this window.
-- Testing several specifications on one dataset is multiple testing. The alpha that survives all of them is the only one worth quoting.
+- **Testing several specifications on one dataset is multiple testing - Day 7's `pipeline_audit.py` turns that into a number instead of a caveat.** Bonferroni/BH-correcting `decay_report`'s 30 industry/model rows shrinks 8 raw-significant (OLS, 5%) down to 2 surviving Bonferroni and 4 surviving Benjamini-Hochberg; `screen_check`'s 9 rows go from 1 raw-significant (Newey-West) to 0 surviving either correction. Read every "significant" alpha in this README's earlier Findings against that: most of them are one test among many and do not survive being treated that way.
+- **`pipeline_audit.py`'s p-values use the normal approximation (`2*(1-Phi(|t|))`), not the exact t-distribution**, to stay consistent with every `significant`/`significant_nw` flag already computed elsewhere in this repo - all of them use the fixed `|t| > 1.96` cutoff regardless of degrees of freedom. This makes the audit's "raw significant" count agree exactly with what `decay_report`/`screen_check` already print, at the cost of being slightly liberal for the shorter-sample rows (screen_check's n≈22) where the exact t-distribution has fatter tails than the normal.
+- **The look-ahead and alignment-order checks in `pipeline_audit.py` are structural, not statistical** - like the STOCKSTALKER/monte-carlo-risk-lab audits this one follows the same pattern of, a clean result proves no *look-ahead bug* was found in the checked functions, not that the regressions' findings are correct. Both checks were run against a manufactured negative control (a synthetic rolling series shifted 6 months into the future, a synthetic positional join) before being trusted on real data, so a clean result here is not merely "the check never fires."
 - **Day 3's CAPM -> FF3 -> FF5+Mom comparison was confounded by sample window, not just factor count - Day 4's `--since 1963-07` re-run isolates the two, and the answer is "both mattered."** Window-matching FF3 to FF5+Mom's own 757-month range turns HiTec's FF3 alpha significant (t=1.55 -> t=2.17) that wasn't significant in the original mismatched comparison, so part of Day 3's finding was a window artifact. But FF5+Mom's alpha (t=4.32) still exceeds the window-matched FF3 figure on the *identical* 757 months, so the rest of the growth is a genuine RMW/CMA/Mom effect, not more window artifact. Only tested at this single cutoff (FF5+Mom's own start); other windows not explored.
 - **Day 3's correctness gate does not replicate an actual published academic figure.** This sandbox has no internet access to a journal's FF3/FF5 replication table, so "replicates a known result" is instead each Fama-French factor's exact analytical self-loading (SMB/HML on FF3, RMW/Mom on FF5+Mom: alpha=0, own loading=1, all others=0, R²=1 to 1e-9) - a real identity check, not an estimate, but not the same evidentiary bar as matching a peer-reviewed number.
 - **Compounding monthly SMB/HML to a year does not reproduce French's published annual figure**, and the gap is not small: measured across all 99 complete years in the fixture, the worst case (HML, 2020) is 21 percentage points off. RF (a real return) compounds to within 0.03pp, so this isn't a parser bug - it's the annually-reconstituted long/short portfolios' own arithmetic, most likely reflecting month-to-month changes in the underlying six size/book-to-market portfolios rather than one fixed portfolio held all year. `factors.kenfrench.annual_compounding_gaps` therefore checks RF tightly but only sanity-checks SMB/HML/Mkt-RF loosely (catches a wrong column or a forgotten /100, not fine-grained correctness). Anything downstream that needs annual factor returns should read the published annual section directly, not compound the monthly one.
