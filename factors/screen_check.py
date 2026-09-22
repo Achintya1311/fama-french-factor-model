@@ -23,7 +23,9 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+from typing import Any
 
 import pandas as pd
 
@@ -38,6 +40,10 @@ DEFAULT_SCREEN_PATH = FIXTURES_DIR / "screen_2026-09-20.json"
 DEFAULT_OHLCV_DIR = FIXTURES_DIR / "ohlcv"
 
 MODEL_FACTOR_COLUMNS = {"capm": ("mkt_rf",), "ff3": FF3_COLUMNS, "ff5mom": FF5_MOM_COLUMNS}
+
+# CAPM's result has no `loadings` dict (just a single beta), so it can't fill
+# the contract's `loadings` block -- only the multi-factor models can.
+CONTRACT_MODELS = ("ff3", "ff5mom")
 
 
 def load_screen(path: str | Path = DEFAULT_SCREEN_PATH) -> list[dict]:
@@ -125,6 +131,33 @@ def run_screen_check(
     return rows
 
 
+def _normalize_ticker(ticker: str) -> str:
+    """Stock Stalker's tickers carry a yfinance '.NS' suffix; contract callers may not."""
+    return ticker.upper().removesuffix(".NS")
+
+
+def to_contract(result) -> dict[str, Any]:
+    """The ``factor`` block this repo publishes to the spine (v0.2).
+
+    ``result`` must be a ``factors.multifactor.FactorResult`` (FF3 or
+    FF5+Mom) -- ``factors.capm.CAPMResult`` has a single beta, not a
+    ``loadings`` dict, so CAPM can't fill this contract. The market factor
+    is written under the key ``mkt`` (matching NEXT_STEPS.md's committed
+    shape), dropping the ``_rf`` suffix this repo's own column carries;
+    every other loading keeps its Ken French column name (``smb``, ``hml``,
+    ``rmw``, ``cma``, ``mom``) unchanged.
+    """
+    loadings = {("mkt" if c == "mkt_rf" else c): result.loadings[c] for c in result.factor_columns}
+    return {
+        "factor": {
+            "alpha_annual": result.alpha_annual,
+            "alpha_t": result.alpha_t,
+            "significant": result.significant,
+            "loadings": loadings,
+        }
+    }
+
+
 def _print_row(row: dict, model: str, diagnostics: bool) -> None:
     ticker, rank, score = row["ticker"], row["rank"], row["score"]
     if "error" in row:
@@ -153,7 +186,25 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--diagnostics", action="store_true", help="add the Newey-West/autocorrelation/heteroskedasticity block"
     )
+    parser.add_argument(
+        "--contract",
+        metavar="PATH",
+        default=None,
+        help="write the v0.2 factor contract block (see to_contract()) for --contract-ticker "
+        "as JSON to this path, for the spine to read as a file -- never as a Python import",
+    )
+    parser.add_argument(
+        "--contract-ticker",
+        default=None,
+        help="which evaluated candidate's result to write as the contract (requires --contract, "
+        "and --model ff3 or ff5mom -- CAPM has no factor loadings)",
+    )
     args = parser.parse_args(argv)
+
+    if bool(args.contract) != bool(args.contract_ticker):
+        parser.error("--contract and --contract-ticker must be given together")
+    if args.contract and args.model not in CONTRACT_MODELS:
+        parser.error(f"--contract requires --model to be one of {CONTRACT_MODELS} (CAPM has no factor loadings)")
 
     rows = run_screen_check(args.screen, args.ohlcv_dir, args.model)
 
@@ -172,6 +223,16 @@ def main(argv: list[str] | None = None) -> None:
     else:
         print(f"  0/{len(evaluated)} candidates show significant alpha at 5% - the technical edge does not "
               "survive factor adjustment on this universe/window")
+
+    if args.contract:
+        target = _normalize_ticker(args.contract_ticker)
+        row = next((r for r in evaluated if _normalize_ticker(r["ticker"]) == target), None)
+        if row is None:
+            parser.error(f"--contract-ticker {args.contract_ticker} not found among this screen's evaluated candidates")
+        contract_path = Path(args.contract)
+        contract_path.parent.mkdir(parents=True, exist_ok=True)
+        contract_path.write_text(json.dumps(to_contract(row["result"]), indent=2) + "\n")
+        print(f"\nwrote factor contract for {row['ticker']} to {contract_path}")
 
 
 if __name__ == "__main__":

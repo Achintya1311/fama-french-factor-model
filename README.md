@@ -299,19 +299,29 @@ single candidate this repo's own multiple-testing check cannot rule out.
 
 ## Where this sits
 
-Part of a nine-repo research pipeline. Stock Stalker screens the NSE universe; this repo publishes a versioned artifact it reads back:
+Part of a nine-repo research pipeline. Stock Stalker screens the NSE universe; this repo publishes a versioned artifact it reads back, via `factors.screen_check --contract PATH --contract-ticker TICKER` (requires `--model ff3` or `--model ff5mom` — CAPM has no factor loadings to report):
 
 ```json
 {
   "factor": {
-    "alpha_annual": 0.021,
-    "alpha_t": 1.3,
-    "significant": false
+    "alpha_annual": -0.0386,
+    "alpha_t": -0.19,
+    "significant": false,
+    "loadings": {"mkt": 0.02, "smb": 0.10, "hml": -0.25, "rmw": 0.02, "cma": -0.76, "mom": -0.22}
   }
 }
 ```
 
-Communication is by file contract, not imports, so either side can be refactored without breaking the other.
+`loadings` carries one entry per factor the chosen model actually regresses on — six for
+FF5+Mom (the model the integration day used), three for FF3 — under each factor's Ken
+French column name, with `mkt_rf` shortened to `mkt`. NEXT_STEPS.md's original shape
+sketched four loadings (`mkt`, `smb`, `hml`, `mom`) before this module was built; no
+model here regresses on exactly that set (FF3 has three factors, FF5+Mom has six), so the
+integration ships whatever the chosen model actually produced rather than force-fitting a
+four-key example written before the code existed — recorded here rather than silently
+matched.
+
+Communication is by file contract, not imports, so either side can be refactored without breaking the other. Stock Stalker's `fixtures/factor/RELIANCE.json` is this exact output, generated against Stock Stalker's own screen and committed there — see its README and CHANGELOG for the integration.
 
 ## Exam mapping
 
