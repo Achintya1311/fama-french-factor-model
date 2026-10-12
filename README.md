@@ -53,8 +53,17 @@ alongside it, and never will unless the screen genuinely needs refreshing.
 excess return), plus RF, built by Agarwalla/Jacob/Varma from CMIE Prowess
 data on BSE/NSE stocks, 1993-10 on. Added for the stockstalker-front-door
 project (Day 4): the Ken French factors above are USD portfolios, the
-wrong benchmark for GULFOILLUB's INR prices, so the eventual GULFOILLUB
-regression (front-door Day 5) runs against this library instead.
+wrong benchmark for GULFOILLUB's INR prices, so the GULFOILLUB regression
+(front-door Day 5, `factors/gulfoillub.py`) runs against this library
+instead.
+
+- GULFOILLUB's own OHLCV - a committed snapshot, not a live read of the sibling repo
+
+`factors/gulfoillub.py` reads `fixtures/stockstalker/ohlcv/GULFOILLUB_NS.csv`
+(front-door Day 5), copied in unmodified from STOCKSTALKER's own
+`fixtures/ohlcv/GULFOILLUB_NS.csv` (2014-07-31 to 2026-10-09), the same
+copy-in-as-a-fixture discipline the RELIANCE/TATACHEM/CROMPTON OHLCV above
+already follows.
 
 ## How to run
 
@@ -70,6 +79,8 @@ python -m factors.screen_check --model capm                  # Stock Stalker's s
 python -m factors.screen_check --model ff5mom --diagnostics  # same, FF5+Mom + Newey-West block
 python -m factors.pipeline_audit                              # Day 7: look-ahead + multiple-testing audit
 python -m factors.pipeline_audit --alpha 0.10                # same, at a looser significance level
+python -m factors.gulfoillub --model ff3wml --diagnostics    # front-door Day 5: GULFOILLUB vs IIMA factors
+python -m factors.gulfoillub --model ff3wml --contract fixtures/factor.json  # + writes the v0.2 contract
 ```
 
 `--portfolio` takes one of the 10 Ken French industry portfolios (NoDur,
@@ -99,6 +110,13 @@ month label, not row order - then Bonferroni/BH-corrects every t-stat
 survive. Exits 1 only on a look-ahead/alignment violation; a multiple-
 testing result where nothing survives correction is an expected finding,
 not a pipeline failure.
+`factors.gulfoillub` (front-door Day 5) regresses GULFOILLUB's own monthly
+returns against IIMA's factors instead of Ken French's - `--model`
+(capm/ff3/ff3wml, default ff3wml) picks IIMA's MF alone, +SMB/HML, or
++WML; there is no ff5mom choice here, since IIMA has no RMW/CMA.
+`--diagnostics` adds the same Newey-West/Ljung-Box/Breusch-Pagan block.
+`--contract PATH` writes the v0.2 spine contract and requires
+`--model ff3wml` - the only spec this module ships to STOCKSTALKER.
 
 ## Findings
 
@@ -193,6 +211,8 @@ story nor a claim that the whole Day 3 finding was an artifact is
 correct on its own.
 
 **stockstalker-front-door Day 4 (2026-10-12) - an Indian factor library, because GULFOILLUB needs one.** Every regression above runs USD-denominated Ken French factors against NSE-listed test assets - a mismatch the hub's `knowaboutit.md` flagged from the start but Days 2-7 never had to resolve, since the industry portfolios and even Stock Stalker's own screen check were about *whether the pipeline runs end to end*, not about getting the benchmark currency right. The front-door project's actual subject, GULFOILLUB, is the first case where that mismatch would land in a number someone might act on, so this day adds `factors/iima.py`, a loader for IIM Ahmedabad's free Indian Fama-French + Momentum library (SMB, HML, WML, MF, RF; CMIE Prowess data on BSE/NSE stocks, 1993-10 to 2025-12; already committed as `fixtures/iima/2025-12_FourFactors_and_Market_Returns_Monthly.csv` by an earlier session). Percent columns convert to decimal and month strings (`YYYY-MM`) convert to a `pandas.PeriodIndex`, the same convention `kenfrench.load_monthly_factors` uses, so the GULFOILLUB regression (front-door Day 5) can swap this loader in for that one without touching the regression code itself. NEXT_STEPS.md's plan described dropping "the NA rows before MF starts," expecting a leading block; the committed file does not match that shape exactly - 1993-10 (the first row) is missing MF/RF as expected, but 1994-11, well into the series, is separately missing SMB/HML/WML. Both rows are dropped (`dropna` across all five columns, not a positional slice), and the README here says so rather than leaving the original, slightly-off description uncorrected. MF is documented by IIMA as already a market *excess* return (built the same way Ken French's Mkt-RF is, under a different name), so `iima.py` does not subtract RF from it a second time. 8 new tests pass (97/97 total), including one pinning the first kept row (1993-11) and the last row (2025-12) against the committed CSV's own published values, and one asserting exactly 385 of the file's 387 data rows survive the NA drop.
+
+**stockstalker-front-door Day 5 (2026-10-12) - GULFOILLUB's own factor regression, on 137 real months instead of RELIANCE's underpowered 22.** Day 4 loaded IIMA's Indian factors for exactly this: GULFOILLUB's monthly returns (`fixtures/stockstalker/ohlcv/GULFOILLUB_NS.csv`, copied in unmodified from STOCKSTALKER's own fixture, 2014-07-31 to 2026-10-09) inner-joined against IIMA's factor history (which stops at 2025-12) give 2014-08 to 2025-12, 137 months - six times the RELIANCE screen check's 22, and long enough that "underpowered" is no longer the limiter it was there. `factors/gulfoillub.py` is the new module: three specs sharing one generic OLS path (`factors.multifactor.run_factor_model`, not `factors.capm.run_capm`, which hardcodes Ken French's `mkt_rf` column name and would not find IIMA's `mf`) - CAPM (MF alone), FF3 (MF/SMB/HML), and FF3+WML (+ momentum). IIMA ships no RMW/CMA, so there is no FF5+Mom equivalent here, unlike the Ken French side of this repo. The honest result: alpha is **not** significant under any spec, plain-OLS or Newey-West, despite the much larger sample - FF3+WML's annualized alpha is +10.64% but t=+1.01 (OLS) / t=+1.20 (NW, lag=4); CAPM's is +8.37% (t=+0.86), FF3's +10.87% (t=+1.12). This is a genuinely different finding from the RELIANCE screen check's "underpowered, can't say" - here there is enough data to say, and the honest answer is that GULFOILLUB's real excess return over this window does not show a statistically distinguishable alpha once market exposure is priced in. The market loading is large and significant (`mf`=+0.797, t=+3.98), `smb`=+0.470 (t=+2.38, a real small-cap tilt) and `hml`=-0.237 (t=-1.16, not significant); `wml`=+0.011 (t=+0.06) is indistinguishable from zero - no detectable momentum tilt, the first time this repo's momentum loading has come back this flat for a real name. Diagnostics find neither residual autocorrelation (Ljung-Box p=0.344) nor heteroskedasticity (Breusch-Pagan p=0.665) on this spec, unlike several of the Ken French industry/model pairs Day 4 flagged. `to_contract()` writes `STOCKSTALKER/fixtures/factor/GULFOILLUB.json` in the existing v0.2 shape with the market loading renamed `mf` -> `mkt` (matching every other satellite's convention) and the extra `wml` key passed through unchanged - `gates.factor.load_contract` was read first and confirmed to check only the four top-level keys, not which keys `loadings` itself carries, so no gate change was needed. 13 new tests pass (110/110 total), including two exact-identity checks in the Day 2/3 style (regressing a synthetic market-plus-noise-free-factor combination recovers alpha=0 and the construction's own loadings to 1e-9) and a restriction test confirming `--contract` refuses CAPM/FF3 (only FF3+WML, the model actually shipped, is allowed to write the spine file); both `python -m factors.gulfoillub --model ff3wml --diagnostics` and `--contract` were run by hand against the real fixtures.
 
 **Day 5 - pointed at Stock Stalker's own screen, and the honest answer is
 "the test is too small to say."** `factors/screen_check.py` reads Stock
@@ -313,6 +333,10 @@ single candidate this repo's own multiple-testing check cannot rule out.
 - **`factors/iima.py` drops every row with any `NA` in it (2 of 387), not just a leading block.** NEXT_STEPS.md's plan described the gap as "the NA rows before MF starts," which held for 1993-10 but not for 1994-11, a separate mid-series gap in SMB/HML/WML alone. The loader's behavior (`dropna` across all five columns) is correct either way, but the original plan's description of *why* a row might be missing was incomplete, and this README corrects it rather than quietly matching the code to the wrong explanation.
 - **IIMA's own documentation states MF is already a market excess return, not a raw market return** - this repo takes that at face value and does not independently verify it against a separate raw-market/RF reconstruction, the same trust-the-source-documentation posture `kenfrench.py` takes for Mkt-RF. If that documentation is wrong, every regression that uses `mf` instead of subtracting `rf` from a raw return would be mis-specified in a way this repo's own tests cannot catch, since they only check the loader against the file as published.
 - **No cross-check between the IIMA and Ken French fixtures exists yet** (unlike `kenfrench.annual_compounding_gaps`, which cross-checks that library's own monthly/annual sections against each other) - `iima.py` has no annual section to check against, and nothing here compares IIMA's Indian market factor to Ken French's US one on the same months to sanity-check the two libraries' broad direction of agreement/disagreement.
+- **IIMA has no RMW/CMA, so `factors/gulfoillub.py` has no FF5+Mom spec** - the richest model it can run is FF3+WML. GULFOILLUB's profitability/investment exposure is simply not measured here, unlike RELIANCE's Ken French-based screen check.
+- **GULFOILLUB's FF3+WML regression finds no significant alpha (t=+1.01 OLS, +1.20 NW) on 137 real months, not 22 underpowered ones - but "not significant" is still not the same claim as "no edge exists."** A larger sample narrows the confidence interval around zero; it does not prove the true alpha is zero, only that this window's data cannot distinguish the point estimate (+10.64% annualized) from zero at the 5% level. `wml`'s loading (+0.011, t=+0.06) is close enough to exactly zero that "no detectable momentum tilt" is a safe reading; the alpha finding is weaker than that.
+- **`factors/gulfoillub.py`'s `--contract` always writes the FF3+WML spec, never CAPM or FF3** - a deliberate restriction (the gate reads one fixture per ticker, and FF3+WML is the richest available), but it means a reader of the shipped contract never sees the CAPM/FF3 comparison this README's Findings section records; they would need to come back here or re-run the CLI.
+- **This day changed only `fama-french-factor-model`.** `STOCKSTALKER/fixtures/factor/GULFOILLUB.json` was written by this repo's own `--contract` flag and copied over as a plain data file; no code in STOCKSTALKER changed, only its test suite (two tests updated to expect a real GULFOILLUB factor section instead of "not available", following the same pattern Day 3's risk contract used).
 
 ## Where this sits
 
@@ -339,6 +363,21 @@ four-key example written before the code existed — recorded here rather than s
 matched.
 
 Communication is by file contract, not imports, so either side can be refactored without breaking the other. Stock Stalker's `fixtures/factor/RELIANCE.json` is this exact output, generated against Stock Stalker's own screen and committed there — see its README and CHANGELOG for the integration.
+
+The front-door project's subject gets its own contract the same way, via `factors.gulfoillub --model ff3wml --contract PATH` (no `--contract-ticker`; this module only ever regresses GULFOILLUB). Stock Stalker's `fixtures/factor/GULFOILLUB.json` is this exact output — the real FF3+WML regression against IIMA factors, not a stand-in:
+
+```json
+{
+  "factor": {
+    "alpha_annual": 0.1064,
+    "alpha_t": 1.01,
+    "significant": false,
+    "loadings": {"mkt": 0.797, "smb": 0.470, "hml": -0.237, "wml": 0.011}
+  }
+}
+```
+
+`loadings` here carries `wml`, a key no Ken French-based contract (RELIANCE's above, or any FF3/FF5+Mom result) has ever shipped — `stockstalker.gates.factor.load_contract` only checks that the four top-level keys are present, not which keys `loadings` itself has, so this passed through on the first try, confirmed by reading that module before relying on it rather than assuming.
 
 ## Exam mapping
 
