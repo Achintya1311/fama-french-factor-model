@@ -6,6 +6,8 @@ Decomposes returns into market, size, value and momentum exposures to test wheth
 
 **Status:** Complete (Sep 2026; Indian IIM-A factors added Oct 2026). Part of a nine-repo equity research pipeline; [STOCKSTALKER](https://github.com/Achintya1311/STOCKSTALKER) is the front door.
 
+*Educational research on historical data. Not investment advice. Not a SEBI-registered research analyst.*
+
 ## What this is
 
 CAPM, then FF3, then FF5 plus momentum, reporting how alpha decays as factors are added. The decay is the result.
