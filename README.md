@@ -1,5 +1,7 @@
 # Fama-French factor model
 
+Educational research on historical data. Not investment advice. Not a SEBI-registered research analyst.
+
 Decomposes returns into market, size, value and momentum exposures to test whether an apparent edge is alpha or just beta wearing a disguise.
 
 **Status:** Complete (Sep 2026; Indian IIM-A factors added Oct 2026). Part of a nine-repo equity research pipeline; [STOCKSTALKER](https://github.com/Achintya1311/STOCKSTALKER) is the front door.
