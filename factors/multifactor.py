@@ -21,6 +21,16 @@ import statsmodels.api as sm
 FF3_COLUMNS = ("mkt_rf", "smb", "hml")
 FF5_MOM_COLUMNS = ("mkt_rf", "smb", "hml", "rmw", "cma", "mom")
 
+# D15: a regression with too few months relative to its own parameter count
+# (intercept + each factor column) is rank-deficient or exactly/near-exactly
+# determined - a fabricated "perfect fit" (R-squared=1.0, t-stats collapsing
+# to 0.0/0.0), not a real finding. Requiring at least 3x the parameter count
+# keeps every case this repo already treats as merely "underpowered" (Day
+# 5-7's 22-month Ken French screen check passes with a 1-month margin for
+# FF5+Mom's 7 parameters) while rejecting the few-month cases a newly-listed
+# ticker's "any stock" tear sheet (C1) can otherwise hit.
+MIN_OBS_PARAM_MULTIPLE = 3
+
 
 @dataclass(frozen=True)
 class FactorResult:
@@ -74,6 +84,14 @@ def run_factor_model(
     ``alpha_annual`` compounds the monthly alpha, matching ``run_capm``.
     """
     aligned = align_excess_returns(portfolio_monthly, factors_monthly, factor_columns)
+    n_params = len(factor_columns) + 1
+    min_obs = MIN_OBS_PARAM_MULTIPLE * n_params
+    if len(aligned) < min_obs:
+        raise ValueError(
+            f"too few observations for a factor regression: n_obs={len(aligned)} against "
+            f"{len(factor_columns)} factor columns ({n_params} parameters incl. intercept) "
+            f"needs at least {min_obs} months ({MIN_OBS_PARAM_MULTIPLE}x the parameter count)"
+        )
     X = sm.add_constant(aligned[list(factor_columns)])
     model = sm.OLS(aligned["excess"], X).fit()
 

@@ -65,6 +65,32 @@ def test_align_excess_returns_subtracts_rf():
     assert np.allclose(aligned["excess"], 0.02)
 
 
+# --- D15: same rank-deficient/exactly-determined floor as
+# factors.multifactor.run_factor_model, mirrored for CAPM's own path ---
+
+
+@pytest.mark.parametrize("n", [1, 2, 3])
+def test_run_capm_rejects_degenerate_few_month_samples(n):
+    factors = _synthetic_factors(n=n, seed=0)
+    portfolio = factors["mkt_rf"] + factors["rf"]
+    with pytest.raises(ValueError, match=f"n_obs={n}"):
+        run_capm(portfolio, factors)
+
+
+def test_run_capm_enforces_the_3x_parameter_count_floor():
+    # CAPM has 2 parameters (intercept + mkt_rf); the floor is 3x that,
+    # i.e. n_obs >= 6. 5 must fail, 6 must pass.
+    factors = _synthetic_factors(n=5, seed=1)
+    portfolio = factors["mkt_rf"] + factors["rf"]
+    with pytest.raises(ValueError, match="n_obs=5"):
+        run_capm(portfolio, factors)
+
+    factors_ok = _synthetic_factors(n=6, seed=1)
+    portfolio_ok = factors_ok["mkt_rf"] + factors_ok["rf"]
+    result = run_capm(portfolio_ok, factors_ok)
+    assert result.n_obs == 6
+
+
 def test_market_regressed_on_itself_is_the_known_answer():
     # Using the real committed fixture: reconstructing the market portfolio
     # as mkt_rf + rf and regressing it on mkt_rf must return alpha=0,

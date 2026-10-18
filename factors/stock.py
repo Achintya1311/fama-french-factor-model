@@ -160,7 +160,16 @@ def main(argv: list[str] | None = None) -> None:
     if args.contract and args.model != CONTRACT_MODEL:
         parser.error(f"--contract requires --model {CONTRACT_MODEL} (the shipped spine spec)")
 
-    result, factors_table = evaluate(args.model, prices_csv=args.prices)
+    try:
+        result, factors_table = evaluate(args.model, prices_csv=args.prices)
+    except ValueError as exc:
+        # D15: an insufficient-data regression (a too-thin inner join, the
+        # realistic case for a newly-listed ticker) is a normal, expected
+        # outcome -- print the one-line reason and stop, never a full
+        # traceback, and never write a fabricated --contract. STOCKSTALKER's
+        # generate_factor_contract reads this exact message back from
+        # stderr when no contract file lands.
+        raise SystemExit(str(exc)) from exc
     _print_result(args.ticker, args.model, result)
 
     if args.diagnostics:

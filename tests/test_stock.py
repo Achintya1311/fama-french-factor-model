@@ -98,6 +98,28 @@ def test_unknown_model_raises():
         evaluate("ff5mom", prices_csv=GULFOILLUB_PRICES)
 
 
+def test_cli_converts_insufficient_data_to_a_one_line_system_exit_and_writes_no_contract(tmp_path, capsys):
+    # D15: a newly-listed ticker's thin price history must come back as a
+    # clean one-line reason (SystemExit, no traceback), never a fabricated
+    # --contract file. 8 month-end closes, all inside IIMA's covered range
+    # (through 2025-12), inner-join down to 7 monthly returns -- well under
+    # FF3+WML's 3x5=15-month floor.
+    prices = tmp_path / "thin.csv"
+    dates = [
+        "2025-01-31", "2025-02-28", "2025-03-31", "2025-04-30",
+        "2025-05-31", "2025-06-30", "2025-07-31", "2025-08-31",
+    ]
+    rows = "\n".join(f"{d},{100 + i}" for i, d in enumerate(dates))
+    prices.write_text(f"date,close\n{rows}\n")
+    out = tmp_path / "should-not-be-written.json"
+
+    with pytest.raises(SystemExit, match="too few observations"):
+        main(["--ticker", "THIN", "--prices", str(prices), "--model", "ff3wml", "--contract", str(out)])
+
+    assert capsys.readouterr().out == ""
+    assert not out.exists()
+
+
 def test_gulfoillub_numbers_are_identical_through_the_generic_cli(tmp_path):
     """C1/Day 22: the generalised CLI must reproduce GULFOILLUB's own pinned
     contract exactly, since STOCKSTALKER's committed ``fixtures/factor/

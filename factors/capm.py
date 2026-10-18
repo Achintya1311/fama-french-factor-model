@@ -16,6 +16,11 @@ from dataclasses import dataclass
 import pandas as pd
 import statsmodels.api as sm
 
+# D15: same floor as factors.multifactor.run_factor_model, mirrored here so
+# CAPM's own single-factor path can't fabricate a "result" from a handful
+# of months either. CAPM has 2 parameters (intercept + mkt_rf).
+MIN_OBS_PARAM_MULTIPLE = 3
+
 
 @dataclass(frozen=True)
 class CAPMResult:
@@ -61,6 +66,14 @@ def run_capm(portfolio_monthly: pd.Series, factors_monthly: pd.DataFrame) -> CAP
     figures.
     """
     aligned = align_excess_returns(portfolio_monthly, factors_monthly)
+    n_params = 2
+    min_obs = MIN_OBS_PARAM_MULTIPLE * n_params
+    if len(aligned) < min_obs:
+        raise ValueError(
+            f"too few observations for a CAPM regression: n_obs={len(aligned)} needs at "
+            f"least {min_obs} months ({MIN_OBS_PARAM_MULTIPLE}x the {n_params} parameters "
+            "incl. intercept)"
+        )
     X = sm.add_constant(aligned["mkt_rf"])
     model = sm.OLS(aligned["excess"], X).fit()
 

@@ -160,7 +160,13 @@ def main(argv: list[str] | None = None) -> None:
     if args.contract and args.model != CONTRACT_MODEL:
         parser.error(f"--contract requires --model {CONTRACT_MODEL} (the shipped spine spec)")
 
-    result, factors_table = evaluate(args.model)
+    try:
+        result, factors_table = evaluate(args.model)
+    except ValueError as exc:
+        # D15: an insufficient-data regression (a too-thin inner join) is a
+        # normal, expected outcome -- print the one-line reason and stop,
+        # never a full traceback, and never write a fabricated --contract.
+        raise SystemExit(str(exc)) from exc
     _print_result(args.model, result)
 
     if args.diagnostics:

@@ -128,3 +128,20 @@ def test_cli_diagnostics_flag_runs_without_error(capsys):
 def test_unknown_model_raises():
     with pytest.raises(ValueError):
         evaluate("ff5mom")
+
+
+def test_cli_converts_insufficient_data_to_a_one_line_system_exit(monkeypatch, capsys):
+    # D15: main() must print the insufficient-data reason as a clean
+    # one-liner (SystemExit, no traceback) and never reach the --contract
+    # write -- the GULFOILLUB fixture itself is always long enough (137
+    # months), so this exercises the CLI wiring directly by making
+    # evaluate() raise the way a thinner ticker's regression would.
+    import factors.gulfoillub as gulfoillub_module
+
+    def _raise(model, returns=None, factors_table=None):
+        raise ValueError("too few observations for a factor regression: n_obs=6 against 3 factor columns")
+
+    monkeypatch.setattr(gulfoillub_module, "evaluate", _raise)
+    with pytest.raises(SystemExit, match="n_obs=6"):
+        main(["--model", "ff3wml"])
+    assert capsys.readouterr().out == ""
