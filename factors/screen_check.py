@@ -171,11 +171,13 @@ def _print_row(row: dict, model: str, diagnostics: bool) -> None:
     )
     if diagnostics:
         diag = run_diagnostics(row["monthly_returns"], row["factors_table"], MODEL_FACTOR_COLUMNS[model])
+        loadings_nw = ", ".join(f"{c}={t:+.2f}" for c, t in diag.loadings_t_nw.items())
         print(
             f"       Newey-West t={diag.alpha_t_nw:+.2f} (lag={diag.nw_lag})  "
             f"significant(NW)={diag.significant_nw}  autocorrelated={diag.autocorrelated}  "
             f"heteroskedastic={diag.heteroskedastic}"
         )
+        print(f"       loadings t (NW): {loadings_nw}")
 
 
 def main(argv: list[str] | None = None) -> None:

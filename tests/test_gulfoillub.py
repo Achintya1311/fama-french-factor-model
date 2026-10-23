@@ -123,6 +123,12 @@ def test_cli_diagnostics_flag_runs_without_error(capsys):
     main(["--model", "ff3wml", "--diagnostics"])
     captured = capsys.readouterr()
     assert "alpha t-stat (NW)" in captured.out
+    # R11: loadings_t_nw was computed by run_diagnostics but never printed
+    # anywhere, so every loading-level claim (e.g. smb/hml/wml) was reported
+    # OLS-only with no Newey-West caveat as explicit as alpha's.
+    assert "loadings t (NW)" in captured.out
+    for factor in ("smb", "hml", "wml"):
+        assert factor in captured.out.split("loadings t (NW)")[1].split("\n")[0]
 
 
 def test_unknown_model_raises():

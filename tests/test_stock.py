@@ -91,6 +91,9 @@ def test_cli_diagnostics_flag_runs_without_error(capsys):
     main(["--ticker", "GULFOILLUB", "--prices", str(GULFOILLUB_PRICES), "--model", "ff3wml", "--diagnostics"])
     captured = capsys.readouterr()
     assert "alpha t-stat (NW)" in captured.out
+    # R11: same gap as gulfoillub.py's own CLI -- loadings_t_nw was never
+    # surfaced here either.
+    assert "loadings t (NW)" in captured.out
 
 
 def test_unknown_model_raises():

@@ -128,6 +128,8 @@ def _print_diagnostics(diag) -> None:
     print("  --- diagnostics ---")
     print(f"  alpha t-stat (NW) : {diag.alpha_t_nw:+.2f} (lag={diag.nw_lag}, vs {diag.alpha_t_ols:+.2f} plain OLS)")
     print(f"  significant (NW)  : {diag.significant_nw}")
+    loadings_nw = ", ".join(f"{c}={t:+.2f}" for c, t in diag.loadings_t_nw.items())
+    print(f"  loadings t (NW)   : {loadings_nw} (vs plain-OLS t above)")
     print(
         f"  residual autocorr : {diag.autocorrelated} "
         f"(Ljung-Box lag={diag.ljung_box_lag}, stat={diag.ljung_box_stat:.2f}, p={diag.ljung_box_pvalue:.3f})"
