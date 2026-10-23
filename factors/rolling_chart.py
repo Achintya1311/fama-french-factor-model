@@ -57,7 +57,14 @@ def render_chart(industry: str, model: str, window: int, output_dir: Path) -> tu
     factors = _load_factors(model)
     portfolio = load_monthly_value_weighted()[industry]
 
-    result = rolling_loadings(portfolio, factors, factor_columns, window=window)
+    try:
+        result = rolling_loadings(portfolio, factors, factor_columns, window=window)
+    except ValueError as exc:
+        # D21: a window too small relative to the model's own parameter
+        # count is a normal, expected rejection -- print the one-line
+        # reason and stop, never a traceback, same convention D15 already
+        # uses for the one-shot regression path (gulfoillub.py/stock.py).
+        raise SystemExit(str(exc)) from exc
     if result.params.empty:
         raise SystemExit(f"no window of {window} months fits inside the available history")
     lower, upper = confidence_band(result.params, result.se)

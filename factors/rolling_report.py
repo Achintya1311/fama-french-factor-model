@@ -50,7 +50,14 @@ def main(argv: list[str] | None = None) -> None:
     )
     args = parser.parse_args(argv)
 
-    table = compute_rolling_betas(args.window)
+    try:
+        table = compute_rolling_betas(args.window)
+    except ValueError as exc:
+        # D21: a window too small relative to the model's own parameter
+        # count is a normal, expected rejection -- print the one-line
+        # reason and stop, never a traceback, same convention D15 already
+        # uses for the one-shot regression path (gulfoillub.py/stock.py).
+        raise SystemExit(str(exc)) from exc
     if table.empty:
         raise SystemExit(f"no window of {args.window} months fits inside the available history")
 

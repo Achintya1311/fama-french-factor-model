@@ -120,6 +120,28 @@ def test_rolling_beta_requires_a_full_window():
     assert betas.empty
 
 
+def test_rolling_beta_rejects_a_window_too_small_for_its_own_parameter_count():
+    # D21: a single-factor model has 2 parameters incl. intercept, so
+    # MIN_WINDOW_PARAM_MULTIPLE*2 = 6 months is the floor. A window of 4 is
+    # near-exactly-determined and must be rejected before RollingOLS can
+    # produce an inf/divide-by-zero "result" - the rolling-window equivalent
+    # of the fabricated fit D15 already rejects for the one-shot regression.
+    factors = _synthetic_factors(n=600, seed=14)
+    portfolio = factors["mkt_rf"] + factors["rf"]
+    with pytest.raises(ValueError, match="window=4"):
+        rolling_beta(portfolio, factors, window=4)
+
+
+def test_rolling_beta_default_window_unaffected_by_the_new_floor():
+    # The portfolio default (window=60) is comfortably above the 6-month
+    # floor for a single factor; the new guard must not change its
+    # behavior or the regime-shift recovery test's own numbers.
+    factors = _synthetic_factors(n=600, seed=17)
+    portfolio = factors["mkt_rf"] + factors["rf"]
+    betas = rolling_beta(portfolio, factors, window=60)
+    assert not betas.empty
+
+
 def _synthetic_multifactor(n=240, seed=0):
     rng = np.random.default_rng(seed)
     index = pd.period_range("2000-01", periods=n, freq="M")
@@ -128,6 +150,23 @@ def _synthetic_multifactor(n=240, seed=0):
             "mkt_rf": rng.normal(0.005, 0.04, n),
             "smb": rng.normal(0.0, 0.03, n),
             "hml": rng.normal(0.0, 0.03, n),
+            "rf": 0.001,
+        },
+        index=index,
+    )
+
+
+def _synthetic_multifactor_ff5mom(n=240, seed=0):
+    rng = np.random.default_rng(seed)
+    index = pd.period_range("2000-01", periods=n, freq="M")
+    return pd.DataFrame(
+        {
+            "mkt_rf": rng.normal(0.005, 0.04, n),
+            "smb": rng.normal(0.0, 0.03, n),
+            "hml": rng.normal(0.0, 0.03, n),
+            "rmw": rng.normal(0.0, 0.03, n),
+            "cma": rng.normal(0.0, 0.03, n),
+            "mom": rng.normal(0.0, 0.03, n),
             "rf": 0.001,
         },
         index=index,
@@ -173,6 +212,30 @@ def test_rolling_loadings_requires_a_full_window():
     assert result.params.empty
     assert result.se.empty
     assert list(result.params.columns) == ["mkt_rf", "smb"]
+
+
+def test_rolling_loadings_rejects_a_window_too_small_for_ff5mom_param_count():
+    # D21's own repro: window=7 against FF5+Mom's 6 factor columns (7
+    # parameters incl. intercept) today runs to completion with no error,
+    # loadings swinging to roughly -2600/+2300 and inf internal standard
+    # errors (RuntimeWarning: divide by zero from RollingOLS) - a fabricated,
+    # confident-looking "result" from a near-exactly-determined regression.
+    factors = _synthetic_multifactor_ff5mom(n=600, seed=15)
+    portfolio = factors["mkt_rf"] + factors["rf"]
+    factor_columns = ("mkt_rf", "smb", "hml", "rmw", "cma", "mom")
+    with pytest.raises(ValueError, match="window=7"):
+        rolling_loadings(portfolio, factors, factor_columns, window=7)
+
+
+def test_rolling_loadings_default_window_unaffected_by_the_new_floor():
+    # The portfolio default (window=60) against FF5+Mom's 7 parameters is
+    # comfortably above any reasonable floor; the new guard must not
+    # change its behavior.
+    factors = _synthetic_multifactor_ff5mom(n=240, seed=16)
+    portfolio = factors["mkt_rf"] + factors["rf"]
+    factor_columns = ("mkt_rf", "smb", "hml", "rmw", "cma", "mom")
+    result = rolling_loadings(portfolio, factors, factor_columns, window=60)
+    assert not result.params.empty
 
 
 def test_confidence_band_brackets_the_point_estimate_and_widens_with_z():

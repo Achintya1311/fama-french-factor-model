@@ -29,6 +29,18 @@ from statsmodels.stats.stattools import durbin_watson
 
 from factors.multifactor import align_excess_returns
 
+# D21: the rolling-window equivalent of D15's MIN_OBS_PARAM_MULTIPLE
+# (factors.multifactor). A rolling window too small relative to its own
+# parameter count (intercept + each factor column) is rank-deficient or
+# near-exactly-determined inside RollingOLS, producing loadings that swing
+# into the hundreds/thousands with `inf` internal standard errors instead
+# of a real finding -- the fabricated-fit failure mode D15 already guards
+# against for the one-shot regression, reproduced here with
+# `--window 7` against FF5+Mom's 7 parameters. Same multiple as D15's
+# constant, for the same reason: it rejects only windows that are actually
+# too thin, not merely short.
+MIN_WINDOW_PARAM_MULTIPLE = 3
+
 
 def newey_west_lag(n_obs: int) -> int:
     """Newey & West's (1994) automatic bandwidth rule: floor(4*(n/100)**(2/9)).
@@ -125,7 +137,20 @@ def rolling_beta(
     a beta from 12 months of data on a "60-month rolling beta" chart would
     be a different, noisier statistic wearing the same label. Returned
     series is indexed by each window's last month.
+
+    Raises ``ValueError`` if ``window`` itself is too small relative to the
+    single-factor model's own parameter count (intercept + 1), per
+    ``MIN_WINDOW_PARAM_MULTIPLE`` (D21) -- before RollingOLS can turn a
+    near-exactly-determined window into a fabricated-looking beta.
     """
+    n_params = 2  # intercept + factor_column
+    min_window = MIN_WINDOW_PARAM_MULTIPLE * n_params
+    if window < min_window:
+        raise ValueError(
+            f"window={window} is too small for a 1-factor rolling regression ({n_params} "
+            f"parameters incl. intercept): needs at least {min_window} months "
+            f"({MIN_WINDOW_PARAM_MULTIPLE}x the parameter count)"
+        )
     aligned = align_excess_returns(portfolio_monthly, factors_monthly, (factor_column,))
     if len(aligned) < window:
         return pd.Series([], dtype=float, name=f"beta_{factor_column}").rename_axis("month")
@@ -162,7 +187,20 @@ def rolling_loadings(
     caveat that already applies to ``capm.py``/``multifactor.py``'s
     full-sample t-stats applies here too, with no diagnostics-style fix
     available for the rolling case.
+
+    Raises ``ValueError`` if ``window`` itself is too small relative to
+    ``factor_columns``' own parameter count (intercept + each column), per
+    ``MIN_WINDOW_PARAM_MULTIPLE`` (D21) -- the same guard ``rolling_beta``
+    applies for the single-factor case, generalized to FF3/FF5+Mom.
     """
+    n_params = len(factor_columns) + 1
+    min_window = MIN_WINDOW_PARAM_MULTIPLE * n_params
+    if window < min_window:
+        raise ValueError(
+            f"window={window} is too small for a rolling regression against "
+            f"{len(factor_columns)} factor columns ({n_params} parameters incl. intercept): "
+            f"needs at least {min_window} months ({MIN_WINDOW_PARAM_MULTIPLE}x the parameter count)"
+        )
     aligned = align_excess_returns(portfolio_monthly, factors_monthly, factor_columns)
     columns = list(factor_columns)
     if len(aligned) < window:
