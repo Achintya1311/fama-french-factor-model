@@ -306,6 +306,63 @@ survives the strictest correction across every reading. That doesn't make
 it real; with only two corrections and one dataset, it just means it's the
 single candidate this repo's own multiple-testing check cannot rule out.
 
+**Day 83 (R17) - re-asking the alpha question with power: a cross-section,
+not one stock.** Day 5's GULFOILLUB alpha (+10.64%/yr, t=+1.01 OLS) is one
+stock on 137 months - long enough to beat the 22-month RELIANCE screen
+check's own "underpowered" caveat, but still a single time series, which
+can only ever answer "is this one asset's alpha distinguishable from
+zero," never "is there alpha in the NSE F&O cross-section." Pre-registered
+first (`docs/PREREG_panel_alpha.md`, committed before any of this was
+computed): FF3+WML on the 213 stock-only NSE F&O underlyings
+(`factors/universe.py`, from STOCKSTALKER's committed `fo_mktlots.csv`
+snapshot), prices fetched via a GitHub Actions workflow
+(`.github/workflows/fetch-panel-prices.yml`, same pattern as
+`markowitz-portfolio-optimizer`'s `fetch-largecaps.yml`) rather than this
+sandbox's own blocked IP, with a 60-overlapping-month-per-stock floor.
+
+189 of 213 stocks clear that floor (24 don't: 17 with fewer than 60
+overlapping months, 7 below `multifactor.run_factor_model`'s own D15
+anti-degenerate-fit floor entirely). The pre-registered **Benjamini-Hochberg
+test, at the 10% FDR level, is the headline result: 0 of 189 stocks'
+alphas survive FDR correction**, against 24/189 (12.7%) raw-"significant"
+at the uncorrected 5% level - close to what a 5%-per-look false-positive
+rate run across 189 independent-ish tests would produce by chance alone,
+not evidence of a real cross-sectional alpha. The factors explain a real
+but partial share of return variance (R-squared mean 0.331, median 0.326,
+range 0.014-0.582) - roughly two-thirds of the typical panel stock's
+monthly variance is stock-specific, not factor exposure. The pre-registered
+power statement: the panel's own fitted standard errors imply a median
+minimum detectable alpha, at 80% power, of **30.6%/yr annualized** (mean
+36.1%, as low as 15.3% for the longest, least volatile histories and as
+high as 181.6% for the shortest) - in the same range this README's own Day
+5 finding already estimated for GULFOILLUB alone, now confirmed across the
+whole panel rather than guessed from one stock's residual volatility.
+
+**The pre-registered GRS joint test could not be computed, and that is
+itself the finding, not a gap this day patches by dropping stocks after
+seeing the result.** GRS needs every included asset's residuals measured
+over one shared window (a common T), so the test is restricted to the
+subset of the 189-stock panel with full coverage over a common window;
+that window's start is forced to the *latest* of every included stock's
+own first month, and with 213 F&O underlyings spanning listing dates from
+2015 to well into the 2020s, the shared window shrinks to just 62 months
+(2020-11 to 2025-12) across N=188 stocks - `Sigma`, GRS's N x N residual
+covariance matrix, needs `T > N+K` (here `192`) to be invertible at all,
+and `62 < 192` by a wide margin. This is a real, structural limit of
+applying a classic GRS test to a *wide* (213-name), *heterogeneous-listing-date*
+cross-section, not a bug: the same breadth that makes the Benjamini-Hochberg
+test well-powered (189 roughly-independent stocks) is exactly what makes
+GRS's shared-window requirement bite. `factors/panel.py`'s
+`grs_common_window_panel` reports this honestly (`infeasible_reason`,
+surfaced on the CLI) rather than silently narrowing the panel - the
+pre-registration explicitly ruled out that patch.
+
+Reproduce: `python -m factors.panel` (reads the committed
+`fixtures/panel_ohlcv/` fixtures `fetch-panel-prices.yml` wrote). GULFOILLUB's
+own single-stock regression (Day 5, `factors.gulfoillub`) is kept exactly as
+it was - the worked example this cross-section test was pre-registered to
+generalize, not a result this day replaces.
+
 ## Limitations and what would make me wrong
 
 - Ken French factors are constructed on US data. Applying them to NSE names is an approximation that needs stating every time.
@@ -334,6 +391,8 @@ single candidate this repo's own multiple-testing check cannot rule out.
 - **`factors/gulfoillub.py`'s `--contract` always writes the FF3+WML spec, never CAPM or FF3** - a deliberate restriction (the gate reads one fixture per ticker, and FF3+WML is the richest available), but it means a reader of the shipped contract never sees the CAPM/FF3 comparison this README's Findings section records; they would need to come back here or re-run the CLI.
 - **This day changed only `fama-french-factor-model`.** `STOCKSTALKER/fixtures/factor/GULFOILLUB.json` was written by this repo's own `--contract` flag and copied over as a plain data file; no code in STOCKSTALKER changed, only its test suite (two tests updated to expect a real GULFOILLUB factor section instead of "not available", following the same pattern Day 3's risk contract used).
 - **D15 fix (18 Oct 2026): `run_factor_model`/`run_capm` now refuse to fit below a 3x-the-parameter-count minimum sample.** Before this fix, a thin or newly-listed ticker's inner join against IIMA/Ken French factors could land at 4-6 months, which a 4- or 5-parameter OLS fits exactly or over-exactly - a rank-deficient or exactly-determined design matrix that silently returns a "result" (R-squared=1.0, t-stats collapsed to 0.0/0.0) rather than erroring, the one case this repo's "never a fabricated number" discipline had no guard for. Both functions now raise `ValueError` naming `n_obs` and the factor count when `n_obs < 3 * (len(factor_columns) + 1)`; `gulfoillub.py`'s and `stock.py`'s CLIs catch it and exit with that one-line reason instead of a traceback or a written `--contract`. The floor is deliberately loose enough to leave every case this repo already treats as merely "underpowered" untouched - Day 5-7's 22-month Ken French screen check passes FF5+Mom's 7-parameter floor (21 months) by a 1-month margin, and GULFOILLUB's 137 months are nowhere near either floor. The one real-world case this did change: STOCKSTALKER's TATAELXSI smoke test (14 months against FF3+WML's 15-month floor) now correctly reports "insufficient data" instead of the `alpha_t=-0.98` it previously fabricated from a near-rank-deficient fit - a stricter, more honest answer, not a regression.
+- **Day 83's panel (R17) replays *today's* 213-name F&O lot-size list back to each stock's own full price history, with no point-in-time F&O-membership history available in this sandbox** - the same survivorship caveat D23 already states for `markowitz-portfolio-optimizer`'s large-cap universe. A stock that lost (or gained) F&O eligibility partway through its history is still included (or excluded) as if today's membership always held; the panel's Benjamini-Hochberg and R-squared findings inherit whatever bias, if any, that implies.
+- **The GRS common-window subset (Day 83, R17) is not the same 189-stock panel the Benjamini-Hochberg test and R-squared figures use** - it is a 188-stock subset restricted to one shared 62-month window (2020-11 to 2025-12), and even that subset's GRS statistic could not be computed (`T=62 < N+K=192`; see Findings). A reader comparing "0/189 survive BH" against "GRS not computable" should not read the second as a weaker version of the first test on the same data - they are different sample windows answering structurally different questions (per-stock FDR control vs. one joint test requiring a shared T).
 
 ## Checkpoint log
 
