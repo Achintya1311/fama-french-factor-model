@@ -1,0 +1,62 @@
+name: Fetch NSE F&O panel OHLCV fixtures
+
+# R17 (hub CRITIQUES.md) / docs/PREREG_panel_alpha.md: the panel-alpha
+# cross-section test needs price history for the 213-name NSE F&O stock
+# universe, not just GULFOILLUB's own fixture. scripts/fetch_panel_prices.py
+# fetches it from the same free yfinance source the rest of this portfolio
+# already uses -- never run by hand from the interactive sandbox, since
+# that IP is not a reliable free-tier data source (LESSONS.md point 4);
+# GitHub's hosted runners are.
+#
+# Triggers once on push of this file or the script itself, so committing
+# either one starts the first real fetch with no manual dispatch. The
+# weekly schedule keeps the fixture from going stale after that.
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/fetch-panel-prices.yml"
+      - "scripts/fetch_panel_prices.py"
+      - "factors/universe.py"
+      - "fixtures/stockstalker/fo_mktlots.csv"
+  schedule:
+    - cron: "15 12 * * 1"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install
+        run: pip install pandas yfinance
+
+      - name: Fetch the F&O stock panel (best effort)
+        # A 429 or an empty response from one ticker is not a workflow
+        # failure -- scripts/fetch_panel_prices.py already retries with
+        # backoff and skips a ticker that still fails, logging it. The
+        # commit step below is the real pass/fail signal for this run.
+        run: PYTHONPATH=. python3 scripts/fetch_panel_prices.py
+        continue-on-error: true
+
+      - name: Commit if the fixture changed
+        run: |
+          git config user.name "Achintya1311"
+          git config user.email "67464985+Achintya1311@users.noreply.github.com"
+          git add fixtures/panel_ohlcv
+          if git diff --cached --quiet; then
+            echo "no change in the fetched fixture - nothing to commit"
+            exit 0
+          fi
+          git commit -m "data: refresh NSE F&O panel OHLCV fixtures ($(date -u +%Y-%m-%d))"
+          git push
