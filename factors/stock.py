@@ -112,6 +112,10 @@ def to_contract(result: FactorResult) -> dict[str, Any]:
 def _print_result(ticker: str, model: str, result: FactorResult) -> None:
     label = MODEL_LABELS[model]
     print(f"{label}: {ticker.upper()} vs IIMA factors")
+    print(
+        "Educational research on historical data. Not investment advice. "
+        "Not a SEBI-registered research analyst."
+    )
     print(f"  months regressed  : {result.n_obs}")
     print(f"  alpha (monthly)   : {result.alpha_monthly:+.4%}")
     print(f"  alpha (annualized): {result.alpha_annual:+.4%}")

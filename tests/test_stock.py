@@ -96,6 +96,17 @@ def test_cli_diagnostics_flag_runs_without_error(capsys):
     assert "loadings t (NW)" in captured.out
 
 
+def test_cli_prints_the_sebi_disclaimer(capsys):
+    # S15: same gap as gulfoillub.py's own CLI -- the disclaimer was never
+    # printed, only in the static README text.
+    main(["--ticker", "GULFOILLUB", "--prices", str(GULFOILLUB_PRICES), "--model", "ff3wml"])
+    captured = capsys.readouterr()
+    assert (
+        "Educational research on historical data. Not investment advice. "
+        "Not a SEBI-registered research analyst."
+    ) in captured.out
+
+
 def test_unknown_model_raises():
     with pytest.raises(ValueError):
         evaluate("ff5mom", prices_csv=GULFOILLUB_PRICES)

@@ -131,6 +131,18 @@ def test_cli_diagnostics_flag_runs_without_error(capsys):
         assert factor in captured.out.split("loadings t (NW)")[1].split("\n")[0]
 
 
+def test_cli_prints_the_sebi_disclaimer(capsys):
+    # S15: this human-facing, named-stock CLI printed alpha/t-stat/
+    # significance output with no disclaimer line anywhere in the code,
+    # only in the static README text.
+    main(["--model", "ff3wml"])
+    captured = capsys.readouterr()
+    assert (
+        "Educational research on historical data. Not investment advice. "
+        "Not a SEBI-registered research analyst."
+    ) in captured.out
+
+
 def test_unknown_model_raises():
     with pytest.raises(ValueError):
         evaluate("ff5mom")

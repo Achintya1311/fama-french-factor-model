@@ -211,6 +211,10 @@ def main(argv: list[str] | None = None) -> None:
     rows = run_screen_check(args.screen, args.ohlcv_dir, args.model)
 
     print(f"Screen check ({args.model.upper()}): does Stock Stalker's technical rank survive factor adjustment?")
+    print(
+        "Educational research on historical data. Not investment advice. "
+        "Not a SEBI-registered research analyst."
+    )
     for row in rows:
         _print_row(row, args.model, args.diagnostics)
 

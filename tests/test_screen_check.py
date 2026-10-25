@@ -172,6 +172,18 @@ def test_cli_contract_rejects_a_ticker_outside_the_screen(tmp_path):
         main(["--model", "ff5mom", "--contract", str(tmp_path / "x.json"), "--contract-ticker", "NOPE"])
 
 
+def test_cli_prints_the_sebi_disclaimer(capsys):
+    # S15: this human-facing, named-stock CLI printed per-candidate alpha/
+    # t-stat output with no disclaimer line anywhere in the code, only in
+    # the static README text.
+    main([])
+    captured = capsys.readouterr()
+    assert (
+        "Educational research on historical data. Not investment advice. "
+        "Not a SEBI-registered research analyst."
+    ) in captured.out
+
+
 def test_cli_diagnostics_flag_prints_newey_west_loadings(capsys):
     # R11: this CLI's --diagnostics block printed the Newey-West alpha
     # t-stat but never diag.loadings_t_nw, so every loading-level claim it
