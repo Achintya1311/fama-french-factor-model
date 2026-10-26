@@ -447,12 +447,16 @@ The front-door project's subject gets its own contract the same way, via `factor
     "alpha_annual": 0.1064,
     "alpha_t": 1.01,
     "significant": false,
-    "loadings": {"mkt": 0.797, "smb": 0.470, "hml": -0.237, "wml": 0.011}
+    "loadings": {"mkt": 0.797, "smb": 0.470, "hml": -0.237, "wml": 0.011},
+    "factor_source": "IIMA India factors (MF/SMB/HML/WML), monthly",
+    "window_start": "2014-08",
+    "window_end": "2025-12",
+    "n_months": 137
   }
 }
 ```
 
-`loadings` here carries `wml`, a key no Ken French-based contract (RELIANCE's above, or any FF3/FF5+Mom result) has ever shipped — `stockstalker.gates.factor.load_contract` only checks that the four top-level keys are present, not which keys `loadings` itself has, so this passed through on the first try, confirmed by reading that module before relying on it rather than assuming.
+`factor_source`, `window_start`, `window_end` and `n_months` (added 26 Oct 2026, P98; `factors.stock` writes them too) say which factors and which months the alpha comes from, so the tear sheet can name them. `loadings` here carries `wml`, a key no Ken French-based contract (RELIANCE's above, or any FF3/FF5+Mom result) has ever shipped — `stockstalker.gates.factor.load_contract` only checks that the four top-level keys are present, not which keys `loadings` itself has, so this passed through on the first try, confirmed by reading that module before relying on it rather than assuming.
 
 **Day 22 (C1): any-stock tear sheet, factor exposure.** `factors.gulfoillub` only ever regresses GULFOILLUB against its one committed fixture. `factors/stock.py` is the ticker-agnostic version of the same regression (`--ticker` for the label, `--prices` for any OHLCV CSV with `date`/`close` columns), sharing every underlying function with `gulfoillub.py` so the two necessarily agree bit-for-bit on the same input — `tests/test_stock.py` pins this with a regression test against GULFOILLUB's own contract. Stock Stalker's front door (`stockstalker.live_contracts.generate_factor_contract`) shells out to `python -m factors.stock` as a subprocess, the same pattern Day 21 already used for the risk contract, writing `outputs/contracts/<TICKER>/factor.json` for a ticker with no committed `fixtures/factor/<TICKER>.json` — a file contract, never a cross-repo import. `gulfoillub.py` and its own pinned GULFOILLUB/RELIANCE fixtures are untouched.
 

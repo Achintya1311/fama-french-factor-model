@@ -86,7 +86,10 @@ def test_to_contract_has_the_v0_2_shape_with_mkt_renamed_from_mf():
     result, _ = evaluate(CONTRACT_MODEL)
     contract = to_contract(result)
     factor = contract["factor"]
-    assert set(factor) == {"alpha_annual", "alpha_t", "significant", "loadings"}
+    assert set(factor) == {
+        "alpha_annual", "alpha_t", "significant", "loadings",
+        "factor_source", "window_start", "window_end", "n_months",
+    }
     assert isinstance(factor["alpha_annual"], float)
     assert isinstance(factor["alpha_t"], float)
     assert isinstance(factor["significant"], bool)
@@ -116,7 +119,7 @@ def test_cli_writes_contract_file(tmp_path):
     import json
 
     data = json.loads(out.read_text())
-    assert set(data["factor"]) == {"alpha_annual", "alpha_t", "significant", "loadings"}
+    assert {"alpha_annual", "alpha_t", "significant", "loadings"} <= set(data["factor"])
 
 
 def test_cli_diagnostics_flag_runs_without_error(capsys):
@@ -163,3 +166,13 @@ def test_cli_converts_insufficient_data_to_a_one_line_system_exit(monkeypatch, c
     with pytest.raises(SystemExit, match="n_obs=6"):
         main(["--model", "ff3wml"])
     assert capsys.readouterr().out == ""
+
+
+def test_contract_names_the_factor_set_and_window():
+    """P98: alpha means little without which factors and which months."""
+    result, _ = evaluate(CONTRACT_MODEL)
+    factor = to_contract(result)["factor"]
+    assert factor["factor_source"] == "IIMA India factors (MF/SMB/HML/WML), monthly"
+    assert factor["window_start"] == "2014-08"
+    assert factor["window_end"] == "2025-12"
+    assert factor["n_months"] == 137

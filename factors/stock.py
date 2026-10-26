@@ -105,6 +105,11 @@ def to_contract(result: FactorResult) -> dict[str, Any]:
             "alpha_t": result.alpha_t,
             "significant": result.significant,
             "loadings": loadings,
+            # P98: which factors and which months (additive keys).
+            "factor_source": f"IIMA India factors ({'/'.join(c.upper() for c in result.factor_columns)}), monthly",
+            "window_start": result.window_start,
+            "window_end": result.window_end,
+            "n_months": result.n_obs,
         }
     }
 

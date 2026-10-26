@@ -43,6 +43,8 @@ class FactorResult:
     loadings_t: dict[str, float]
     r_squared: float
     significant: bool  # |alpha_t| > 1.96, i.e. non-robust 5% two-sided test
+    window_start: str | None = None  # P98: first regressed month, e.g. "2014-08"
+    window_end: str | None = None  # P98: last regressed month
 
 
 def align_excess_returns(
@@ -107,6 +109,8 @@ def run_factor_model(
         loadings_t={c: float(model.tvalues[c]) for c in factor_columns},
         r_squared=float(model.rsquared),
         significant=abs(alpha_t) > 1.96,
+        window_start=str(aligned.index[0]),
+        window_end=str(aligned.index[-1]),
     )
 
 
