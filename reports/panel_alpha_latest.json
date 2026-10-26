@@ -7,9 +7,9 @@
   "bh_rejected": 0,
   "raw_significant": 24,
   "r2_mean": 0.330783,
-  "r2_median": 0.325816,
+  "r2_median": 0.325817,
   "mde_median": 0.306186,
   "mde_mean": 0.361323,
   "grs_status": "not computable: T=62 common-window months is not enough for N=188 assets and K=4 factors (need T > N+K = 192); Sigma would be rank-deficient",
-  "fixture_last_date": "2026-10-26"
+  "fixture_last_date": "2026-10-23"
 }
