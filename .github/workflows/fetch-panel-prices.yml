@@ -39,7 +39,9 @@ jobs:
           cache: pip
 
       - name: Install
-        run: pip install pandas yfinance
+        # The package itself too: the run regenerates the panel report and
+        # runs the test suite before committing anything (D37, P82).
+        run: pip install -e ".[dev]" yfinance
 
       - name: Fetch the F&O stock panel (best effort)
         # A 429 or an empty response from one ticker is not a workflow
@@ -49,11 +51,21 @@ jobs:
         run: PYTHONPATH=. python3 scripts/fetch_panel_prices.py
         continue-on-error: true
 
+      - name: Regenerate the panel report from the refreshed fixtures
+        # D37: adjusted closes are rewritten after dividends/splits, so the
+        # panel result can move on any refresh; the report moves with it.
+        run: python -m factors.panel --json reports/panel_alpha_latest.json
+
+      - name: Tests
+        # P82: a push made with GITHUB_TOKEN starts no other workflow, so ci.yml
+        # never sees this commit. Run the suite here; a failure stops the commit.
+        run: pytest -q
+
       - name: Commit if the fixture changed
         run: |
           git config user.name "Achintya1311"
           git config user.email "67464985+Achintya1311@users.noreply.github.com"
-          git add fixtures/panel_ohlcv
+          git add fixtures/panel_ohlcv reports/panel_alpha_latest.json
           if git diff --cached --quiet; then
             echo "no change in the fetched fixture - nothing to commit"
             exit 0

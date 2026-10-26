@@ -320,7 +320,7 @@ snapshot), prices fetched via a GitHub Actions workflow
 `markowitz-portfolio-optimizer`'s `fetch-largecaps.yml`) rather than this
 sandbox's own blocked IP, with a 60-overlapping-month-per-stock floor.
 
-189 of 213 stocks clear that floor (24 don't: 17 with fewer than 60
+On the 24 Oct 2026 snapshot (fixtures `4da42c3`, prices to 23 Oct 2026), 189 of 213 stocks clear that floor (24 don't: 17 with fewer than 60
 overlapping months, 7 below `multifactor.run_factor_model`'s own D15
 anti-degenerate-fit floor entirely). The pre-registered **Benjamini-Hochberg
 test, at the 10% FDR level, is the headline result: 0 of 189 stocks'
@@ -337,6 +337,8 @@ minimum detectable alpha, at 80% power, of **30.6%/yr annualized** (mean
 high as 181.6% for the shortest) - in the same range this README's own Day
 5 finding already estimated for GULFOILLUB alone, now confirmed across the
 whole panel rather than guessed from one stock's residual volatility.
+
+The weekly refresh rewrites adjusted price history (dividends and splits), so these numbers can move. Each refresh regenerates [`reports/panel_alpha_latest.json`](reports/panel_alpha_latest.json) from the new prices and runs the test suite before committing; `tests/test_panel_report.py` checks the committed report matches the committed fixtures (D37, P82). The figures above stay as the pre-registered run on the 24 Oct snapshot.
 
 **The pre-registered GRS joint test could not be computed, and that is
 itself the finding, not a gap this day patches by dropping stocks after

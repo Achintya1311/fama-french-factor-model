@@ -22,6 +22,7 @@ statement.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -361,11 +362,57 @@ def grs_common_window_panel(
     )
 
 
+def fixture_last_date(fixtures_dir: Path, tickers: list[str]) -> str | None:
+    """Latest date in any of these tickers' price files: the snapshot a report was computed on."""
+    last = None
+    for ticker in tickers:
+        path = Path(fixtures_dir) / f"{ticker.replace('.', '_')}.csv"
+        if not path.exists():
+            continue
+        lines = path.read_text().strip().splitlines()
+        if len(lines) > 1:
+            date = lines[-1].split(",", 1)[0]
+            last = date if last is None or date > last else last
+    return last
+
+
+def build_report(tickers: list[str], build: PanelBuildResult, bh: BHCorrectionResult,
+                 grs_panel: GRSPanelResult | None, min_months: int, fixtures_dir: Path) -> dict:
+    """D37: the panel headline as plain JSON, so the weekly data refresh can
+    regenerate it next to the data and a test can check the two agree."""
+    r2 = [r.r_squared for r in build.results]
+    mdes = [minimum_detectable_alpha_annual(r.se_alpha_monthly) for r in build.results
+            if r.se_alpha_monthly == r.se_alpha_monthly]
+    if grs_panel is None:
+        grs_status = "too few assets with full coverage"
+    elif grs_panel.grs is None:
+        grs_status = f"not computable: {grs_panel.infeasible_reason}"
+    else:
+        grs_status = f"stat={grs_panel.grs.stat:.4f} p={grs_panel.grs.p_value:.4f}"
+    return {
+        "n_tickers": len(tickers),
+        "n_panel": len(build.results),
+        "n_skipped": len(build.skipped),
+        "min_months": min_months,
+        "fdr": bh.fdr,
+        "bh_rejected": bh.n_rejected,
+        "raw_significant": bh.n_raw_significant,
+        "r2_mean": round(float(np.mean(r2)), 6),
+        "r2_median": round(float(np.median(r2)), 6),
+        "mde_median": round(float(np.median(mdes)), 6) if mdes else None,
+        "mde_mean": round(float(np.mean(mdes)), 6) if mdes else None,
+        "grs_status": grs_status,
+        "fixture_last_date": fixture_last_date(fixtures_dir, tickers),
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--fixtures-dir", default=str(DEFAULT_PANEL_OHLCV_DIR))
     parser.add_argument("--min-months", type=int, default=MIN_PANEL_MONTHS)
     parser.add_argument("--fdr", type=float, default=0.10)
+    parser.add_argument("--json", default=None, metavar="PATH",
+                        help="also write the headline as JSON (reports/panel_alpha_latest.json is this, committed)")
     args = parser.parse_args(argv)
 
     fixtures_dir = Path(args.fixtures_dir)
@@ -407,6 +454,11 @@ def main(argv: list[str] | None = None) -> int:
               f"stat={g.stat:.4f}, p={g.p_value:.4f}, "
               f"{'REJECTS' if g.p_value < 0.05 else 'does not reject'} H0: all alphas = 0")
 
+    if args.json:
+        report = build_report(tickers, build, bh, grs_panel, args.min_months, fixtures_dir)
+        Path(args.json).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json).write_text(json.dumps(report, indent=2) + "\n")
+        print(f"report written to {args.json}")
     return 0
 
 
