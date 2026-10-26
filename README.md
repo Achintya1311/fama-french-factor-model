@@ -10,7 +10,7 @@ Educational research on historical data. Not investment advice. Not a SEBI-regis
 
 Decomposes returns into market, size, value and momentum exposures to test whether an apparent edge is alpha or just beta wearing a disguise.
 
-**Status:** Complete (Sep 2026; Indian IIM-A factors added Oct 2026). Part of a nine-repo equity research pipeline; [STOCKSTALKER](https://github.com/Achintya1311/STOCKSTALKER) is the front door.
+**Status:** Complete (Sep 2026; Indian IIM-A factors added Oct 2026). Part of an eight-repo equity research pipeline (STOCKSTALKER plus seven research repos; the separate stockstalker-lab is not counted); [STOCKSTALKER](https://github.com/Achintya1311/STOCKSTALKER) is the front door.
 
 *Educational research on historical data. Not investment advice. Not a SEBI-registered research analyst.*
 
@@ -413,7 +413,7 @@ generalize, not a result this day replaces.
 
 ## Where this sits
 
-Part of a nine-repo research pipeline. Stock Stalker screens the NSE universe; this repo publishes a versioned artifact it reads back, via `factors.screen_check --contract PATH --contract-ticker TICKER` (requires `--model ff3` or `--model ff5mom` — CAPM has no factor loadings to report):
+Part of an eight-repo research pipeline. Stock Stalker screens the NSE universe; this repo publishes a versioned artifact it reads back, via `factors.screen_check --contract PATH --contract-ticker TICKER` (requires `--model ff3` or `--model ff5mom` — CAPM has no factor loadings to report):
 
 ```json
 {
