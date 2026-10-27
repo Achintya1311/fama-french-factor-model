@@ -38,7 +38,13 @@ from factors.capm import run_capm
 from factors.diagnostics import run_diagnostics
 from factors.industry import INDUSTRY_COLUMNS, load_monthly_value_weighted
 from factors.kenfrench import load_monthly_factors
-from factors.multifactor import FF3_COLUMNS, FF5_MOM_COLUMNS, load_ff5_mom_factors, run_factor_model
+from factors.multifactor import (
+    FF3_COLUMNS,
+    FF5_MOM_COLUMNS,
+    alpha_change_attribution,
+    load_ff5_mom_factors,
+    run_factor_model,
+)
 
 OUTPUT_PATH = Path(__file__).resolve().parent.parent / "outputs" / "alpha_decay.csv"
 
@@ -111,6 +117,27 @@ def decay_tally(rows: list[dict[str, object]]) -> dict[str, object]:
         out[key].append(industry)
     return out
 
+
+def _print_attribution(industry: str, since: str | None) -> None:
+    portfolio = _restrict(load_monthly_value_weighted(), since)[industry]
+    r = alpha_change_attribution(
+        portfolio,
+        _restrict(load_monthly_factors(), since), FF3_COLUMNS,
+        _restrict(load_ff5_mom_factors(), since), FF5_MOM_COLUMNS,
+    )
+    print(
+        f"\n{industry} alpha-change attribution, FF3 -> FF5+Mom (n = {r['n_obs'][0]} / {r['n_obs'][1]} months; "
+        "loading x mean premium, monthly x 12, each model's own factor series):"
+    )
+    print(f"{'factor':<8}{'FF3 beta':>10}{'FF5+Mom beta':>14}{'pp/yr':>9}")
+    for factor, value in r["contributions"].items():
+        print(
+            f"{factor:<8}{r['base_loadings'].get(factor, 0.0):>+10.3f}"
+            f"{r['rich_loadings'].get(factor, 0.0):>+14.3f}{value * 1200:>+9.2f}"
+        )
+    print(f"{'residual':<32}{r['residual'] * 1200:>+9.2f}")
+    print(f"{'total alpha change':<32}{r['alpha_change'] * 1200:>+9.2f}")
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -121,6 +148,12 @@ def main(argv: list[str] | None = None) -> None:
             "restrict every model to months >= this one, e.g. 1963-07 (FF5+Mom's own "
             "start) to isolate factor-count effects from Day 3's sample-window confound"
         ),
+    )
+    parser.add_argument(
+        "--attribution",
+        default=None,
+        metavar="INDUSTRY",
+        help="also print, for this industry, which factors move alpha from FF3 to FF5+Mom (P128)",
     )
     args = parser.parse_args(argv)
     rows = _rows(args.since)
@@ -147,6 +180,9 @@ def main(argv: list[str] | None = None) -> None:
     )
     if not tally["matched_window"]:
         print("(CAPM and FF5+Mom ran on different months here; rerun with --since 1963-07 for the matched-window tally)")
+
+    if args.attribution:
+        _print_attribution(args.attribution, args.since)
 
     out_path = OUTPUT_PATH if args.since is None else OUTPUT_PATH.with_name(
         f"alpha_decay_since_{args.since.replace('-', '')}.csv"

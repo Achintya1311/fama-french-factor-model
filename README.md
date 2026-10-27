@@ -248,8 +248,11 @@ finding for HiTec was genuinely a window artifact: comparing FF3 on 1,201
 months to FF5+Mom on 757 was misleading. But the growth doesn't stop
 there - FF5+Mom's alpha (+5.44%, t=4.47 OLS / 4.32 NW) is still well above the
 window-matched FF3 figure, on the *identical* 757 months. That residual
-growth cannot be a window effect, since the window is now held fixed; it
-has to be the RMW/CMA/Mom loadings themselves pulling alpha up. The honest
+growth cannot be a window effect, since the window is now held fixed. Measured
+(P128, `python -m factors.decay_report --since 1963-07 --attribution HiTec`, loading x mean
+premium, exact on each model's own factor series): of the +2.65 pp/yr move from FF3 to FF5+Mom,
+CMA adds +1.20, RMW +0.96, Mkt +0.46, Mom +0.43 and SMB +0.15, while the smaller HML loading
+takes away 0.55. HiTec's negative CMA and RMW loadings do most of the work, but not all of it. The honest
 summary: Day 3's HiTec finding was partly a confound (window) and partly
 real (factors) - neither the original "alpha shrinks with more factors"
 story nor a claim that the whole Day 3 finding was an artifact is

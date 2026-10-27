@@ -131,3 +131,40 @@ def load_ff5_mom_factors() -> pd.DataFrame:
     if merged.empty:
         raise ValueError("FF5 and momentum series share no overlapping months")
     return merged
+
+
+def alpha_change_attribution(
+    portfolio_monthly: pd.Series,
+    base_factors: pd.DataFrame,
+    base_columns: tuple[str, ...],
+    rich_factors: pd.DataFrame,
+    rich_columns: tuple[str, ...],
+) -> dict:
+    """P128 (CRITIQUES.md): split the monthly alpha change between two models by factor.
+
+    OLS with an intercept gives ``alpha = mean(excess) - sum(beta_k * mean(f_k))``
+    on each model's own sample, so ``alpha_rich - alpha_base`` is exactly
+    ``sum_k (beta_base_k * mean_base(f_k) - beta_rich_k * mean_rich(f_k))``
+    (a factor absent from a model has beta 0 there) plus ``residual``, the
+    difference in mean excess return between the two aligned samples (zero
+    when both share months and RF). Each model's own factor series is used,
+    so a factor whose definition differs between files (FF5's SMB vs FF3's)
+    shows up inside its contribution rather than as a residual.
+    """
+    base = run_factor_model(portfolio_monthly, base_factors, base_columns)
+    rich = run_factor_model(portfolio_monthly, rich_factors, rich_columns)
+    base_aligned = align_excess_returns(portfolio_monthly, base_factors, base_columns)
+    rich_aligned = align_excess_returns(portfolio_monthly, rich_factors, rich_columns)
+    contributions = {}
+    for column in dict.fromkeys((*base_columns, *rich_columns)):
+        base_term = base.loadings.get(column, 0.0) * (base_aligned[column].mean() if column in base_columns else 0.0)
+        rich_term = rich.loadings.get(column, 0.0) * (rich_aligned[column].mean() if column in rich_columns else 0.0)
+        contributions[column] = float(base_term - rich_term)
+    return {
+        "alpha_change": rich.alpha_monthly - base.alpha_monthly,
+        "contributions": contributions,
+        "residual": float(rich_aligned["excess"].mean() - base_aligned["excess"].mean()),
+        "base_loadings": base.loadings,
+        "rich_loadings": rich.loadings,
+        "n_obs": (base.n_obs, rich.n_obs),
+    }
