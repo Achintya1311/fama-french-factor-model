@@ -75,6 +75,37 @@ instead.
 copy-in-as-a-fixture discipline the RELIANCE/TATACHEM/CROMPTON OHLCV above
 already follows.
 
+- NSE F&O panel prices (Day 83) - `fixtures/panel_ohlcv/`, one file per
+  F&O stock, fetched with yfinance `auto_adjust=True` by
+  `.github/workflows/fetch-panel-prices.yml` (weekly, `scripts/fetch_panel_prices.py`),
+  never from this sandbox. Every refresh rewrites the back-adjusted history
+  and regenerates `reports/panel_alpha_latest.json` (D37).
+
+**What was copied from STOCKSTALKER, and from where (D55).** Every file under
+`fixtures/stockstalker/` is a byte-for-byte copy. The OHLCV bars are
+STOCKSTALKER's yfinance `auto_adjust=True` bars, back-adjusted for splits and
+dividends, not the prices NSE printed on those days. `tests/test_fixture_provenance.py`
+pins each hash and compares the OHLCV copies with `../STOCKSTALKER/fixtures/ohlcv/`
+when that checkout exists.
+
+| File | sha256 | Source |
+|---|---|---|
+| `ohlcv/RELIANCE_NS.csv` | `81d022cb3dff50dc316d94dc1a58b64947a991850c6595480165a2723b623369` | STOCKSTALKER `d9fe2d8` |
+| `ohlcv/TATACHEM_NS.csv` | `986700d1bd15887486c77d240cbcd7f668664efc9d4a207b47de898e47a585ed` | STOCKSTALKER `d9fe2d8` |
+| `ohlcv/CROMPTON_NS.csv` | `db66db9aba5594544631f8887e7540101257e953cdec5f65ef76318b5a54327a` | STOCKSTALKER `d9fe2d8` |
+| `ohlcv/GULFOILLUB_NS.csv` | `91f0f915352e5f06bd118484fb4cec7cd8dce964d72d5c4ffc14d782d1f8d7b3` | STOCKSTALKER `2065467` |
+| `fo_mktlots.csv` | `a94b41b6e42a2a7ce898df7c50b08c4843ebe24664145826a9b0652733d17452` | STOCKSTALKER `69a8de7` (NSE list fetched 2026-10-17) |
+| `fo_mktlots_meta.json` | `aeb5c4ed987983b544c1f9edf54e806349fd5bad891ec6824dccf3679ce164ed` | STOCKSTALKER `69a8de7` |
+| `screen_2026-09-20.json` | `c1c30b0ab2887170810df496f23f28298005e7f6afad112c81ac5d56e9a8c036` | STOCKSTALKER screen output, 2026-09-20 (main was at `ac11565`) |
+
+The lot list defines the Day 83 panel universe (`factors/universe.py`). It is
+kept at the 2026-10-17 snapshot on purpose, because the panel test was
+pre-registered on it. STOCKSTALKER has since refreshed its own copy (`43e8cdd`,
+26 Oct 2026, list dated 2026-10-22, where ICICIPRULI appears as ICICILIFE), so
+the two files now differ and the test does not compare them. The screen file is
+a frozen output: STOCKSTALKER does not commit its `outputs/`, so this repo holds
+the only copy, and current STOCKSTALKER code is not claimed to reproduce it.
+
 ## How to run
 
 ```bash
