@@ -90,6 +90,27 @@ def _rows(since: str | None = None) -> list[dict[str, object]]:
     return rows
 
 
+
+def decay_tally(rows: list[dict[str, object]]) -> dict[str, object]:
+    """P127 (CRITIQUES.md): per industry, does |alpha| shrink or grow from CAPM to FF5+Mom?
+
+    The README's question is about all ten industries, not HiTec alone.
+    ``matched_window`` is False when the two models ran on different
+    months (the default run: 1,201 vs 757), where the comparison mixes in
+    the window confound; use ``--since 1963-07`` for the honest tally.
+    """
+    by = {(r["industry"], r["model"]): r for r in rows}
+    industries = list(dict.fromkeys(r["industry"] for r in rows))
+    out: dict[str, object] = {"shrinks": [], "grows": [], "unchanged": [], "matched_window": True}
+    for industry in industries:
+        capm, ff5 = by[(industry, "CAPM")], by[(industry, "FF5+Mom")]
+        if capm["n_obs"] != ff5["n_obs"]:
+            out["matched_window"] = False
+        before, after = abs(capm["alpha_annual"]), abs(ff5["alpha_annual"])
+        key = "shrinks" if after < before else "grows" if after > before else "unchanged"
+        out[key].append(industry)
+    return out
+
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -117,6 +138,15 @@ def main(argv: list[str] | None = None) -> None:
             f"{str(r['significant']):>6}{str(r['significant_nw']):>8}"
             f"{str(r['autocorrelated']):>10}{str(r['heteroskedastic']):>6}{r['r_squared']:>7.3f}"
         )
+
+    tally = decay_tally(rows)
+    total = len(tally["shrinks"]) + len(tally["grows"]) + len(tally["unchanged"])
+    print(
+        f"\n|alpha| shrinks CAPM -> FF5+Mom in {len(tally['shrinks'])} of {total} industries "
+        f"({', '.join(tally['shrinks'])}); grows in {len(tally['grows'])} ({', '.join(tally['grows'])})"
+    )
+    if not tally["matched_window"]:
+        print("(CAPM and FF5+Mom ran on different months here; rerun with --since 1963-07 for the matched-window tally)")
 
     out_path = OUTPUT_PATH if args.since is None else OUTPUT_PATH.with_name(
         f"alpha_decay_since_{args.since.replace('-', '')}.csv"
