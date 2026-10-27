@@ -96,3 +96,16 @@ note French spells the annual label across two lines here (`Annual
 Factors:` then `January-December` on the next line) instead of one; the
 loader doesn't care, since it matches on the `,Mom` header row itself, not
 the label text above it.
+
+## Pinned hashes (D56)
+
+`tests/test_fixture_provenance.py` pins each file, so a refresh (French
+revises past months when he updates the library) shows up as a failing test
+until this list and any affected README figures are updated together.
+
+| File | sha256 |
+|---|---|
+| `F-F_Research_Data_Factors.csv` | `347bdcabb60863073a120111b40cb21b1a0682d6a82e919df057bdbea15e3a73` |
+| `10_Industry_Portfolios.csv` | `198f70cf13f74425426384b54e34c1339ab0027e0e44dde0c5a13edb3f2cab53` |
+| `F-F_Research_Data_5_Factors_2x3.csv` | `ca5b6baf0ff5607b5c17e74ba96c1ff832fbb0e9f9044f60816bcdf69b36ff39` |
+| `F-F_Momentum_Factor.csv` | `af286d7898c42fc5c92a8c3604ca9105cc45a1ad9dd34b489173a880d4387458` |

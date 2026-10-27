@@ -63,3 +63,32 @@ def test_data_sources_name_every_copy_its_hash_and_source():
     for token in ("69a8de7", "43e8cdd", "ac11565", "auto_adjust=True", "back-adjusted",
                   "fixtures/panel_ohlcv/", "fetch-panel-prices.yml"):
         assert token in sources
+
+
+# D56: the downloaded factor libraries, pinned so a silent replacement
+# (IIMA re-releases under a new file name; French revises history) fails here.
+DOWNLOADED = {
+    "iima/2025-12_FourFactors_and_Market_Returns_Monthly.csv": "3d54c27b20a133fdd210d988ce21a4dc5b1f525df9ac19ccd437dee0a78cc8e9",
+    "ken_french/F-F_Research_Data_Factors.csv": "347bdcabb60863073a120111b40cb21b1a0682d6a82e919df057bdbea15e3a73",
+    "ken_french/10_Industry_Portfolios.csv": "198f70cf13f74425426384b54e34c1339ab0027e0e44dde0c5a13edb3f2cab53",
+    "ken_french/F-F_Research_Data_5_Factors_2x3.csv": "ca5b6baf0ff5607b5c17e74ba96c1ff832fbb0e9f9044f60816bcdf69b36ff39",
+    "ken_french/F-F_Momentum_Factor.csv": "af286d7898c42fc5c92a8c3604ca9105cc45a1ad9dd34b489173a880d4387458",
+}
+
+
+@pytest.mark.parametrize("name", sorted(DOWNLOADED))
+def test_downloaded_fixture_matches_the_pinned_hash(name):
+    assert _sha256(ROOT / "fixtures" / name) == DOWNLOADED[name]
+
+
+@pytest.mark.parametrize("name", sorted(DOWNLOADED))
+def test_fixture_note_records_the_hash(name):
+    folder, _ = name.split("/")
+    assert DOWNLOADED[name] in (ROOT / "fixtures" / folder / "README.md").read_text()
+
+
+def test_iima_note_records_url_commit_and_missing_download_date():
+    note = (ROOT / "fixtures" / "iima" / "README.md").read_text()
+    assert "https://faculty.iima.ac.in/iffm/Indian-Fama-French-Momentum/DATA/" in note
+    assert "7998b18" in note
+    assert "not recorded" in note

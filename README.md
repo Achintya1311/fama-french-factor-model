@@ -65,7 +65,8 @@ data on BSE/NSE stocks, 1993-10 on. Added for the stockstalker-front-door
 project (Day 4): the Ken French factors above are USD portfolios, the
 wrong benchmark for GULFOILLUB's INR prices, so the GULFOILLUB regression
 (front-door Day 5, `factors/gulfoillub.py`) runs against this library
-instead.
+instead. Provenance, the missing download date and the pinned hash are in
+`fixtures/iima/README.md` (D56).
 
 - GULFOILLUB's own OHLCV - a committed snapshot, not a live read of the sibling repo
 
