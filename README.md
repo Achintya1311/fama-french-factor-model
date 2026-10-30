@@ -22,9 +22,9 @@ Pointed at the Stock Stalker screen output to answer one question directly: does
 
 ## Correctness gate
 
-Replicates a published FF3 result on a known portfolio within tolerance before being trusted on new data.
+Exact-identity regressions: the market portfolio rebuilt as `mkt_rf + rf` regressed on `mkt_rf`, and each Fama-French factor regressed on the set it belongs to, must return its own loading 1, every other loading and alpha 0, and R² 1 (`tests/test_capm.py`, `tests/test_multifactor.py`). That checks the regression wiring, not the model: no published FF3 figure is replicated, because this sandbox cannot reach a journal's table (see Limitations, "Day 3's correctness gate does not replicate an actual published academic figure").
 
-This is the test that decides whether the repo is finished. A result that has not passed it is a draft.
+This is the test that decides whether the regression code is trusted. A result that has not passed it is a draft.
 
 ## Data sources
 
@@ -455,7 +455,7 @@ generalize, not a result this day replaces.
 
 ## Where this sits
 
-Part of an eight-repo research pipeline. Stock Stalker screens the NSE universe; this repo publishes a versioned artifact it reads back, via `factors.screen_check --contract PATH --contract-ticker TICKER` (requires `--model ff3` or `--model ff5mom` — CAPM has no factor loadings to report):
+Part of an eight-repo research pipeline. Stock Stalker's front door builds each tear sheet's factor section by running this repo's `factors.stock --ticker TICKER --prices CSV --model ff3wml --contract PATH` as a subprocess (STOCKSTALKER `stockstalker/live_contracts.py`, `generate_factor_contract`): the FF3+WML regression against IIMA's Indian factors, shown below for GULFOILLUB. The older path is `factors.screen_check --contract PATH --contract-ticker TICKER` (requires `--model ff3` or `--model ff5mom` — CAPM has no factor loadings to report), which regresses against USD Ken French factors; it produced Stock Stalker's committed `fixtures/factor/RELIANCE.json` during the Sep 2026 integration (rerun 30 Oct 2026, same numbers):
 
 ```json
 {
