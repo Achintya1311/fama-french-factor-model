@@ -227,8 +227,13 @@ def main(argv: list[str] | None = None) -> None:
         names = ", ".join(r["ticker"] for r in significant)
         print(f"  {len(significant)}/{len(evaluated)} candidate(s) show significant alpha at 5% (OLS): {names}")
     else:
-        print(f"  0/{len(evaluated)} candidates show significant alpha at 5% - the technical edge does not "
-              "survive factor adjustment on this universe/window")
+        # P154: an insignificant alpha on this few months is absence of evidence,
+        # not evidence the edge failed (README Day 5: "underpowered").
+        months = sorted({r["result"].n_obs for r in evaluated})
+        n_text = "/".join(f"n={m}" for m in months)
+        print(f"  0/{len(evaluated)} candidates show significant alpha at 5% (OLS), on {n_text} months against "
+              "USD Ken French factors, not IIMA's Indian factors: too few months to tell whether the "
+              "technical edge survives factor adjustment")
 
     if args.contract:
         target = _normalize_ticker(args.contract_ticker)

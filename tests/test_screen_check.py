@@ -192,3 +192,16 @@ def test_cli_diagnostics_flag_prints_newey_west_loadings(capsys):
     captured = capsys.readouterr()
     assert "Newey-West t=" in captured.out
     assert "loadings t (NW)" in captured.out
+
+
+@pytest.mark.parametrize("model", ["capm", "ff3", "ff5mom"])
+def test_cli_does_not_call_an_underpowered_null_a_failed_edge(model, capsys):
+    # P154: 22 months against USD Ken French factors cannot show the edge failed.
+    from factors.screen_check import main
+
+    main(["--model", model])
+    out = capsys.readouterr().out
+    assert "does not survive factor adjustment" not in out
+    assert "too few months to tell" in out
+    assert "n=22" in out
+    assert "USD Ken French factors, not IIMA's Indian factors" in out
