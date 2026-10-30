@@ -114,6 +114,37 @@ def run_factor_model(
     )
 
 
+def excess_return_split(
+    portfolio_monthly: pd.Series,
+    factors_monthly: pd.DataFrame,
+    result: FactorResult,
+) -> dict:
+    """Split the mean monthly excess return into alpha and factor exposure (P140).
+
+    With an intercept, OLS residuals average zero, so on the regressed months
+    mean(excess) = alpha + sum(loading x mean factor) exactly. Returns
+    ``mean_excess``, ``alpha``, ``exposure`` and ``by_factor`` (one term per
+    factor), all monthly, arithmetic.
+    """
+    aligned = align_excess_returns(portfolio_monthly, factors_monthly, result.factor_columns)
+    by_factor = {c: result.loadings[c] * float(aligned[c].mean()) for c in result.factor_columns}
+    return {
+        "mean_excess": float(aligned["excess"].mean()),
+        "alpha": result.alpha_monthly,
+        "exposure": float(sum(by_factor.values())),
+        "by_factor": by_factor,
+    }
+
+
+def print_excess_return_split(split: dict) -> None:
+    print("  --- mean excess return split (monthly, arithmetic; parts add up exactly under OLS) ---")
+    print(f"  mean excess return (monthly): {split['mean_excess']:+.2%}")
+    print(f"  alpha                       : {split['alpha']:+.2%}")
+    print(f"  factor exposure             : {split['exposure']:+.2%}")
+    terms = ", ".join(f"{c}={v:+.2%}" for c, v in split["by_factor"].items())
+    print(f"    by factor (loading x mean): {terms}")
+
+
 def load_ff5_mom_factors() -> pd.DataFrame:
     """Return the merged FF5 + momentum monthly factor table.
 

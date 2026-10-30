@@ -37,7 +37,7 @@ import pandas as pd
 
 from factors.diagnostics import run_diagnostics
 from factors.iima import load_iima_factors
-from factors.multifactor import FactorResult, run_factor_model
+from factors.multifactor import FactorResult, excess_return_split, print_excess_return_split, run_factor_model
 from factors.screen_check import load_monthly_returns
 
 MODEL_FACTOR_COLUMNS: dict[str, tuple[str, ...]] = {
@@ -160,6 +160,11 @@ def main(argv: list[str] | None = None) -> None:
         "--diagnostics", action="store_true", help="add the Newey-West/Ljung-Box/Breusch-Pagan block"
     )
     parser.add_argument(
+        "--split",
+        action="store_true",
+        help="add the mean monthly excess return split into alpha and factor exposure (P140)",
+    )
+    parser.add_argument(
         "--contract",
         metavar="PATH",
         default=None,
@@ -182,6 +187,9 @@ def main(argv: list[str] | None = None) -> None:
         # stderr when no contract file lands.
         raise SystemExit(str(exc)) from exc
     _print_result(args.ticker, args.model, result)
+
+    if args.split:
+        print_excess_return_split(excess_return_split(load_stock_returns(args.prices), factors_table, result))
 
     if args.diagnostics:
         diag = run_diagnostics(load_stock_returns(args.prices), factors_table, MODEL_FACTOR_COLUMNS[args.model])
