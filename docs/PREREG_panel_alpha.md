@@ -1,5 +1,7 @@
 # Pre-registration: is there alpha in the NSE F&O cross-section? (R17)
 
+Educational research on historical data. Not investment advice. Not a SEBI-registered research analyst.
+
 Committed before any panel data is fetched or any regression is run, per
 `portfolio-fixes/CRITIQUES.md` row R17 and `PLAN.md`'s pre-registration
 convention ("changing X because I expect Y" is stated up front, not after
